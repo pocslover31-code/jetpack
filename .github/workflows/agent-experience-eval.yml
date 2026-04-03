@@ -1,0 +1,57 @@
+name: Agent Experience Evaluation
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Weekly, Monday 6am UTC
+  push:
+    branches: ['trunk']
+    paths:
+      - '**/CLAUDE.md'
+      - '**/AGENTS.md'
+      - '**/AGENTS.override.md'
+      - '**/.claude/**'
+      - '**/.cursor/**'
+      - '**/.codex/**'
+      - '**/.cursorrules'
+      - '**/.windsurfrules'
+      - '**/.aider.conf.yml'
+      - '**/.codeiumrc'
+      - '**/.github/copilot-instructions.md'
+  pull_request:
+    paths:
+      - 'projects/github-actions/agent-experience-eval/**'
+      - 'projects/js-packages/agent-experience-eval/**'
+      - '.github/workflows/agent-experience-eval.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    # Skip fork PRs — secrets not available
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup tools
+        uses: ./.github/actions/tool-setup
+        with:
+          php: false
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: |
+          pnpm --filter @automattic/jetpack-agent-experience-eval build
+          pnpm --filter ./projects/github-actions/agent-experience-eval run build
+
+      - name: Evaluate Agent Experience
+        uses: ./projects/github-actions/agent-experience-eval
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

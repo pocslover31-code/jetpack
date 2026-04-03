@@ -1,0 +1,42 @@
+name: "Agent Experience Evaluation"
+description: "Evaluate repository AI agent experience quality"
+branding:
+  icon: 'award'
+  color: 'blue'
+
+inputs:
+  anthropic_api_key:
+    description: "Anthropic API key"
+    required: true
+  model:
+    description: "Claude model to use"
+    required: false
+    default: "claude-sonnet-4-6"
+  output_path:
+    description: "Path for JSON output"
+    required: false
+    default: "agent-experience-eval.json"
+  upload_artifact:
+    description: "Whether to upload the artifact"
+    required: false
+    default: "true"
+  artifact_name:
+    description: "Name of the uploaded artifact"
+    required: false
+    default: "agent-experience-eval"
+  artifact_retention_days:
+    description: "Artifact retention days"
+    required: false
+    default: "30"
+
+outputs:
+  score:
+    description: "Overall score (0-100)"
+  grade:
+    description: "Letter grade"
+  json_path:
+    description: "Path to JSON report"
+
+runs:
+  using: node24
+  main: dist/index.mjs

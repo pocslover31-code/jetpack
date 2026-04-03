@@ -1,0 +1,14 @@
+{
+	"extends": "jetpack-js-tools/tsconfig.base.json",
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": [ "ES2022" ],
+		"types": [ "node" ],
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"declaration": false,
+		"strict": true
+	},
+	"files": [],
+	"include": [ "./src" ]
+}
