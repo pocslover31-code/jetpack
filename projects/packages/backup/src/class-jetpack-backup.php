@@ -29,6 +29,8 @@ use Automattic\Jetpack\Terms_Of_Service;
 use Automattic\Jetpack\Tracking;
 use Jetpack_Options;
 use WP_Error;
+use WP_REST_Request;
+use WP_REST_Response;
 use WP_REST_Server;
 use function add_action;
 use function add_filter;
@@ -157,8 +159,8 @@ class Jetpack_Backup {
 	 */
 	public static function add_wp_admin_submenu() {
 		$page_suffix = Admin_Menu::add_menu(
-			'Jetpack Backup',
-			'Backup', // Product name, do not translate.
+			'Jetpack VaultPress Backup',
+			'VaultPress Backup', // Product name, do not translate.
 			'manage_options',
 			'jetpack-backup',
 			array( __CLASS__, 'plugin_settings_page' ),
@@ -175,6 +177,13 @@ class Jetpack_Backup {
 	 */
 	public static function admin_init() {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_scripts' ) );
+
+		// The Backup overview is a focused, full-screen product surface.
+		// Suppress JITMs and other core/plugin admin notices so they don't
+		// reflow on top of the dual-pane layout. Mirrors how Jetpack Forms
+		// handles its dashboard page (`plugins/forms/src/dashboard/class-dashboard.php`).
+		remove_all_actions( 'admin_notices' );
+		remove_all_actions( 'all_admin_notices' );
 	}
 
 	/**
@@ -398,6 +407,332 @@ class Jetpack_Backup {
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => __CLASS__ . '::enqueue_backup',
 				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+			)
+		);
+
+		// Get the rewindable activity log entries for the Backups overview list.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/activity-log',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_activity_log',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'number'    => array(
+						'type'              => 'integer',
+						'default'           => 100,
+						'minimum'           => 1,
+						'maximum'           => 1000,
+						'sanitize_callback' => 'absint',
+					),
+					'aggregate' => array(
+						'type'    => 'boolean',
+						'default' => false,
+					),
+					'after'     => array(
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'before'    => array(
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// List contents of a directory inside a backup — powers the file browser tree.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/ls',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_ls',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id' => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'path'      => array(
+						'type'              => 'string',
+						'default'           => '/',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Get metadata for a single file inside a backup (size, mtime, hash, download url).
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/path-info',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_path_info',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'      => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'manifest_path'  => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'extension_type' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Get a one-time signed download URL for a single file inside a backup.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/file-url',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_file_url',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'             => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'encoded_manifest_path' => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Proxy the backup file CONTENT (not just the URL) for text/code
+		// previews. The signed stream URL returned by file-url is cross-
+		// origin when wp-admin lives on a different host than the WPCOM
+		// API, and the stream endpoint doesn't set CORS headers — so a
+		// browser-side `fetch(signedUrl)` fails. Having the server make
+		// the request and return the body avoids the CORS issue.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/file-content',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_file_content',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'             => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'encoded_manifest_path' => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Initiate a (full or granular) backup download. Returns a download
+		// request id that the progress route polls for status / the final
+		// signed download URL.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/download',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => __CLASS__ . '::initiate_site_backup_download',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'         => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'types'             => array(
+						'type'    => 'object',
+						'default' => new \stdClass(),
+					),
+					'include_path_list' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'exclude_path_list' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Poll progress for an in-flight download. Terminal states include
+		// `url` populated (ready) or an error code / message.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/download/progress',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_download_progress',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'download_id' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		// Prepare a filtered-download build for a specific manifest_filter /
+		// data_type (e.g. a single db table). Returns a build key used by the
+		// companion status endpoint below.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/filtered/prepare',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => __CLASS__ . '::prepare_site_backup_filtered_download',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'       => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'manifest_filter' => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'data_type'       => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		// Poll status for a filtered-download build until the URL is ready.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/filtered/status',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_filtered_download_status',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'key'       => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'data_type' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		// Get a one-time signed download URL for a plugin / theme archive inside a backup.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/extension-url',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_extension_url',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'period'            => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'archive_type'      => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'extension_slug'    => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'extension_version' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Initiate a restore to a specific point in time. `types` selects
+		// data kinds (themes/plugins/roots/contents/sqls/uploads); when
+		// `include_path_list` is non-empty the request becomes a granular
+		// restore (mirrors the download bridge's path mode).
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/restore',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => __CLASS__ . '::initiate_site_backup_restore',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'rewind_id'         => array(
+						'type'              => 'string',
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'types'             => array(
+						'type'    => 'object',
+						'default' => new \stdClass(),
+					),
+					'include_path_list' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'exclude_path_list' => array(
+						'type'              => 'string',
+						'default'           => '',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+
+		// Poll progress for an in-flight restore.
+		register_rest_route(
+			'jetpack/v4',
+			'/site/backup/restore/progress',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => __CLASS__ . '::get_site_backup_restore_progress',
+				'permission_callback' => __CLASS__ . '::backups_permissions_callback',
+				'args'                => array(
+					'restore_id' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
 			)
 		);
 	}
@@ -818,6 +1153,645 @@ class Jetpack_Backup {
 		return rest_ensure_response(
 			json_decode( $response['body'], true )
 		);
+	}
+
+	/**
+	 * Proxy the rewindable activity log for the site.
+	 *
+	 * Powers the Backups overview list. Each entry carries the rewind_id,
+	 * timestamp, summary, and `object.backup_stats` used to render the
+	 * "13 plugins, 3 themes, 7 uploads…" metadata row.
+	 *
+	 * @param WP_REST_Request $request The REST request. Accepts `number`,
+	 *                                 `aggregate`, `after`, `before`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or
+	 *                                   WP_Error on failure.
+	 */
+	public static function get_site_backup_activity_log( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$query = array_filter(
+			array(
+				'number'    => $request->get_param( 'number' ),
+				'aggregate' => $request->get_param( 'aggregate' ) ? 'true' : null,
+				'after'     => $request->get_param( 'after' ),
+				'before'    => $request->get_param( 'before' ),
+			),
+			static function ( $value ) {
+				return null !== $value && '' !== $value;
+			}
+		);
+
+		$endpoint = sprintf( '/sites/%d/activity/rewindable', $blog_id );
+		if ( ! empty( $query ) ) {
+			$endpoint .= '?' . http_build_query( $query );
+		}
+
+		$response = Client::wpcom_json_api_request_as_user(
+			$endpoint,
+			'v2',
+			array(),
+			null,
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_activity_log_fetch_failed',
+				__( 'Could not fetch the site activity log.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * List the contents of a directory inside a backup.
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/backup/ls`. Powers the file
+	 * browser tree — each expanded directory issues one call for its children.
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `rewind_id`, `path`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_ls( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/sites/%d/rewind/backup/ls', $blog_id ),
+			'v2',
+			array( 'method' => 'POST' ),
+			array(
+				'backup_id' => $request->get_param( 'rewind_id' ),
+				'path'      => $request->get_param( 'path' ),
+			),
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_ls_fetch_failed',
+				__( 'Could not list backup contents.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Get metadata for a single file inside a backup.
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/backup/path-info`. Powers the
+	 * file info card (size, mtime, hash, row count, preview URL).
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `rewind_id`,
+	 *                                 `manifest_path`; accepts `extension_type`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_path_info( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/sites/%d/rewind/backup/path-info', $blog_id ),
+			'v2',
+			array( 'method' => 'POST' ),
+			array(
+				'backup_id'      => $request->get_param( 'rewind_id' ),
+				'manifest_path'  => $request->get_param( 'manifest_path' ),
+				'extension_type' => $request->get_param( 'extension_type' ),
+			),
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_path_info_fetch_failed',
+				__( 'Could not fetch file metadata.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Get a one-time signed download URL for a single file inside a backup.
+	 *
+	 * Proxies `GET wpcom/v2 sites/{id}/rewind/backup/{rewind_id}/file/{encoded_manifest_path}/url`.
+	 * The `encoded_manifest_path` is the base64-encoded manifest path (UTF-8 safe).
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `rewind_id`, `encoded_manifest_path`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_file_url( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf(
+				'/sites/%d/rewind/backup/%s/file/%s/url',
+				$blog_id,
+				rawurlencode( $request->get_param( 'rewind_id' ) ),
+				rawurlencode( $request->get_param( 'encoded_manifest_path' ) )
+			),
+			'v2',
+			array(),
+			null,
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_file_url_fetch_failed',
+				__( 'Could not fetch file download URL.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Proxy a text file's content for the file-browser preview.
+	 *
+	 * Resolves the one-time signed URL via `rewind/backup/{id}/file/…/url`,
+	 * fetches the stream server-side, and returns `{ content }` capped at
+	 * 64 KB so a single-click preview can't balloon a response. The browser
+	 * can't hit the stream URL directly because WPCOM's stream endpoint
+	 * doesn't send CORS headers.
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `rewind_id`, `encoded_manifest_path`.
+	 * @return WP_REST_Response|WP_Error The content response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_file_content( $request ) {
+		$blog_id               = Jetpack_Options::get_option( 'id' );
+		$rewind_id             = $request->get_param( 'rewind_id' );
+		$encoded_manifest_path = $request->get_param( 'encoded_manifest_path' );
+
+		// Step 1: get the signed stream URL from WPCOM.
+		$url_response = Client::wpcom_json_api_request_as_user(
+			sprintf(
+				'/sites/%d/rewind/backup/%s/file/%s/url',
+				$blog_id,
+				rawurlencode( $rewind_id ),
+				rawurlencode( $encoded_manifest_path )
+			),
+			'v2',
+			array(),
+			null,
+			'wpcom'
+		);
+
+		if ( is_wp_error( $url_response ) ) {
+			return $url_response;
+		}
+
+		$url_status = wp_remote_retrieve_response_code( $url_response );
+		if ( 200 !== $url_status ) {
+			return new WP_Error(
+				'backup_file_content_url_failed',
+				__( 'Could not resolve file download URL.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $url_status ) && $url_status > 0 ? $url_status : 500 )
+			);
+		}
+
+		$url_body   = json_decode( wp_remote_retrieve_body( $url_response ), true );
+		$signed_url = is_array( $url_body ) && isset( $url_body['url'] ) ? $url_body['url'] : null;
+		if ( ! $signed_url ) {
+			return new WP_Error(
+				'backup_file_content_url_missing',
+				__( 'Could not resolve file download URL.', 'jetpack-backup-pkg' ),
+				array( 'status' => 502 )
+			);
+		}
+
+		// Step 2: fetch the stream body server-side.
+		$stream_response = wp_remote_get(
+			$signed_url,
+			array(
+				'timeout' => 15,
+			)
+		);
+
+		if ( is_wp_error( $stream_response ) ) {
+			return $stream_response;
+		}
+
+		$stream_status = wp_remote_retrieve_response_code( $stream_response );
+		if ( 200 !== $stream_status ) {
+			return new WP_Error(
+				'backup_file_content_stream_failed',
+				__( 'Could not fetch file content.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $stream_status ) && $stream_status > 0 ? $stream_status : 500 )
+			);
+		}
+
+		$content = wp_remote_retrieve_body( $stream_response );
+
+		// Cap preview size — enough to show wp-config.php / robots.txt
+		// without breaking the REST response when someone previews a
+		// multi-megabyte file.
+		$max_bytes = 64 * 1024;
+		if ( strlen( $content ) > $max_bytes ) {
+			$content = substr( $content, 0, $max_bytes );
+		}
+
+		return rest_ensure_response( array( 'content' => $content ) );
+	}
+
+	/**
+	 * Get a one-time signed download URL for a plugin or theme archive inside a backup.
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/backup/{period}/extension/{archive_type}/url`.
+	 * Used by the file browser when a node with `type: "archive"` is activated.
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `period`, `archive_type`,
+	 *                                 `extension_slug`; accepts `extension_version`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_extension_url( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf(
+				'/sites/%d/rewind/backup/%s/extension/%s/url',
+				$blog_id,
+				rawurlencode( $request->get_param( 'period' ) ),
+				rawurlencode( $request->get_param( 'archive_type' ) )
+			),
+			'v2',
+			array( 'method' => 'POST' ),
+			array(
+				'extension_slug'    => $request->get_param( 'extension_slug' ),
+				'extension_version' => $request->get_param( 'extension_version' ),
+			),
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_extension_url_fetch_failed',
+				__( 'Could not fetch extension download URL.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Initiate a backup download (full or granular).
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/downloads`. When
+	 * `include_path_list` is non-empty the request becomes a granular
+	 * download — the wpcom side switches its `types` payload to `paths:true`
+	 * automatically when those lists are present.
+	 *
+	 * @param WP_REST_Request $request The REST request.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function initiate_site_backup_download( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$include_paths = (string) $request->get_param( 'include_path_list' );
+		$exclude_paths = (string) $request->get_param( 'exclude_path_list' );
+		$is_granular   = '' !== $include_paths;
+
+		$body = array(
+			'rewindId' => $request->get_param( 'rewind_id' ),
+			'types'    => $is_granular ? array( 'paths' => true ) : $request->get_param( 'types' ),
+		);
+		if ( $is_granular ) {
+			$body['include_path_list'] = $include_paths;
+			$body['exclude_path_list'] = $exclude_paths;
+		}
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/sites/%d/rewind/downloads', $blog_id ),
+			'v2',
+			array( 'method' => 'POST' ),
+			$body,
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_download_initiate_failed',
+				__( 'Could not start the backup download.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Poll progress for an in-flight backup download.
+	 *
+	 * Proxies `GET wpcom/v2 sites/{id}/rewind/downloads/{downloadId}`.
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `download_id`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_download_progress( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf(
+				'/sites/%d/rewind/downloads/%d',
+				$blog_id,
+				$request->get_param( 'download_id' )
+			),
+			'v2',
+			array(),
+			null,
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_download_progress_fetch_failed',
+				__( 'Could not fetch download progress.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Prepare a filtered-download build for a specific manifest entry.
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/backup/filtered/prepare`.
+	 * Used by the file info card when downloading a single database table.
+	 *
+	 * @param WP_REST_Request $request The REST request.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function prepare_site_backup_filtered_download( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/sites/%d/rewind/backup/filtered/prepare', $blog_id ),
+			'v2',
+			array( 'method' => 'POST' ),
+			array(
+				'backup_id'       => $request->get_param( 'rewind_id' ),
+				'manifest_filter' => $request->get_param( 'manifest_filter' ),
+				'data_type'       => $request->get_param( 'data_type' ),
+			),
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_filtered_prepare_failed',
+				__( 'Could not prepare the filtered download.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Poll status for a filtered-download build until the URL is ready.
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/backup/filtered/status`.
+	 *
+	 * @param WP_REST_Request $request The REST request.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_filtered_download_status( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/sites/%d/rewind/backup/filtered/status', $blog_id ),
+			'v2',
+			array( 'method' => 'POST' ),
+			array(
+				'data_type' => $request->get_param( 'data_type' ),
+				'key'       => $request->get_param( 'key' ),
+			),
+			'wpcom'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_filtered_status_fetch_failed',
+				__( 'Could not fetch filtered-download status.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		return rest_ensure_response( json_decode( wp_remote_retrieve_body( $response ), true ) );
+	}
+
+	/**
+	 * Initiate a restore to a specific point in time (full or granular).
+	 *
+	 * Proxies `POST wpcom/v2 sites/{id}/rewind/to/{rewindId}`. When
+	 * `include_path_list` is non-empty the request becomes a granular
+	 * restore — the wpcom side switches its `types` payload to
+	 * `paths:true` automatically when those lists are present (mirrors
+	 * the download bridge's behaviour).
+	 *
+	 * @param WP_REST_Request $request The REST request.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function initiate_site_backup_restore( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		$rewind_id     = (string) $request->get_param( 'rewind_id' );
+		$include_paths = (string) $request->get_param( 'include_path_list' );
+		$exclude_paths = (string) $request->get_param( 'exclude_path_list' );
+		$is_granular   = '' !== $include_paths;
+
+		// Mirrors Calypso's restore-flow data layer at
+		// state/data-layer/wpcom/activity-log/rewind/to/. We post against
+		// the v1 activity-log endpoint, sending force_rewind together
+		// with either a types map for full restore, or the literal
+		// string paths plus the include and exclude path lists for
+		// granular restore. The endpoint sits under activity-log rather
+		// than under sites-rewind, which is why the obvious sites
+		// prefixed patterns all returned rest_no_route while guessing.
+		$body = array(
+			'force_rewind' => true,
+			'types'        => $is_granular ? 'paths' : $request->get_param( 'types' ),
+		);
+		if ( $is_granular ) {
+			$body['include_path_list'] = $include_paths;
+			if ( '' !== $exclude_paths ) {
+				$body['exclude_path_list'] = $exclude_paths;
+			}
+		}
+
+		// `base_api_path` defaults to 'wpcom' on `as_user`, but the
+		// activity-log endpoints live under `rest/v1/...`
+		// (https://public-api.wordpress.com/rest/v1/activity-log/...).
+		// Sign as the user: rewind is a destructive admin action and
+		// WPCOM's audit log identifies the actor by their wpcom user.
+		// (We tried as_blog v1.1 to side-step user-permission
+		// requirements; WPCOM rejects it with `That API call is not
+		// allowed for this account.` — the rewind endpoint refuses
+		// blog-token auth entirely.)
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf( '/activity-log/%d/rewind/to/%s', $blog_id, rawurlencode( $rewind_id ) ),
+			'1',
+			array( 'method' => 'POST' ),
+			$body,
+			'rest'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			// Forward the upstream WPCOM error so the front-end can
+			// distinguish authorization_required, plan-not-attached,
+			// and rewind_id-not-found cases (the user-facing copy stays
+			// in the React layer where translation lives).
+			$upstream_body = wp_remote_retrieve_body( $response );
+			$decoded       = json_decode( $upstream_body, true );
+			return new WP_Error(
+				'backup_restore_initiate_failed',
+				__( 'Could not start the backup restore.', 'jetpack-backup-pkg' ),
+				array(
+					'status'   => is_int( $status_code ) && $status_code > 0 ? $status_code : 500,
+					'upstream' => is_array( $decoded ) ? $decoded : $upstream_body,
+				)
+			);
+		}
+
+		// Calypso's `fromApi` parses `data.restore_id` from the
+		// response. Normalise to `id` so the TS fetcher
+		// (`initiateBackupRestore` returns `data.id`) sees a stable
+		// shape — same convention as the download initiator.
+		$body          = json_decode( wp_remote_retrieve_body( $response ), true );
+		$restore_id_in = is_array( $body ) && isset( $body['restore_id'] ) ? (int) $body['restore_id'] : 0;
+		if ( ! $restore_id_in ) {
+			return new WP_Error(
+				'backup_restore_initiate_failed',
+				__( 'Could not start the backup restore.', 'jetpack-backup-pkg' ),
+				array( 'status' => 500 )
+			);
+		}
+		return rest_ensure_response( array( 'id' => $restore_id_in ) );
+	}
+
+	/**
+	 * Poll progress for an in-flight restore.
+	 *
+	 * Proxies `GET wpcom/v2 sites/{id}/rewind/restores/{restoreId}`.
+	 *
+	 * @param WP_REST_Request $request The REST request. Requires `restore_id`.
+	 * @return WP_REST_Response|WP_Error The decoded WPCOM response, or WP_Error on failure.
+	 */
+	public static function get_site_backup_restore_progress( $request ) {
+		$blog_id = Jetpack_Options::get_option( 'id' );
+
+		// Calypso polls GET /rest/v1/activity-log/{site}/rewind/{restore_id}/restore-status
+		// (see `state/data-layer/wpcom/activity-log/rewind/restore-status/index.js`).
+		// The response wraps everything in a `restore_status` object —
+		// keys: status, percent, rewind_id, message, error_code,
+		// failure_reason, context, current_entry. We forward the raw
+		// shape; the front-end normaliser already accepts both legacy
+		// flat fields and the wrapped form.
+		$response = Client::wpcom_json_api_request_as_user(
+			sprintf(
+				'/activity-log/%d/rewind/%d/restore-status',
+				$blog_id,
+				$request->get_param( 'restore_id' )
+			),
+			'1',
+			array(),
+			null,
+			'rest'
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status_code ) {
+			return new WP_Error(
+				'backup_restore_progress_fetch_failed',
+				/* translators: error shown to admins when WPCOM's restore status poll fails. */
+				__( 'Could not fetch restore progress.', 'jetpack-backup-pkg' ),
+				array( 'status' => is_int( $status_code ) && $status_code > 0 ? $status_code : 500 )
+			);
+		}
+
+		// Unwrap the WPCOM `restore_status` envelope and normalise field
+		// names so the TS fetcher's flat shape (status / progress /
+		// error_code / reason / message) keeps working without a
+		// front-end change.
+		$body          = json_decode( wp_remote_retrieve_body( $response ), true );
+		$status        = is_array( $body ) && isset( $body['restore_status'] ) && is_array( $body['restore_status'] )
+			? $body['restore_status']
+			: ( is_array( $body ) ? $body : array() );
+		$restore_id_in = isset( $status['restore_id'] )
+			? (int) $status['restore_id']
+			: (int) $request->get_param( 'restore_id' );
+		$normalised    = array(
+			'id'         => $restore_id_in,
+			'status'     => isset( $status['status'] ) ? (string) $status['status'] : 'queued',
+			'progress'   => isset( $status['percent'] ) ? (float) $status['percent'] : 0,
+			'rewind_id'  => isset( $status['rewind_id'] ) ? (string) $status['rewind_id'] : '',
+			'error_code' => isset( $status['error_code'] ) ? (string) $status['error_code'] : '',
+			'reason'     => isset( $status['failure_reason'] ) ? (string) $status['failure_reason'] : '',
+			'message'    => isset( $status['message'] ) ? (string) $status['message'] : '',
+		);
+		return rest_ensure_response( $normalised );
 	}
 
 	/**

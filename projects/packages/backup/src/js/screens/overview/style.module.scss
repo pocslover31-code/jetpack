@@ -1,0 +1,177 @@
+@use "@wordpress/base-styles/variables" as *;
+@use "@wordpress/base-styles/breakpoints" as *;
+
+// Outer shell that holds the surrounding padding. Matches the MSD
+// dashboard's `PageLayout` spacing tokens (20px on mobile, 40px/30px
+// at ≥ medium). Keeping the padding on an outer wrapper means the
+// inner `.overview` gets the full 1344px of content width, rather
+// than having padding chew into it.
+.overviewOuter {
+	padding-block: $grid-unit-20;
+	padding-inline: $grid-unit-20;
+
+	@media (min-width: #{$break-medium}) {
+		padding-block: $grid-unit-40;
+		padding-inline: $grid-unit-30;
+	}
+}
+
+// Content area that caps at the dashboard-wide 1344px and centers.
+.overview {
+	display: flex;
+	flex-direction: column;
+	gap: $grid-unit-20;
+	max-width: 1344px;
+	margin-inline: auto;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: 40% 1fr;
+	gap: $grid-unit-20;
+
+	@media (max-width: #{$break-medium}) {
+		grid-template-columns: 1fr;
+	}
+}
+
+.headerActions {
+	display: flex;
+	align-items: center;
+	gap: $grid-unit-10;
+}
+
+.detailsHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: $grid-unit-15;
+	inline-size: 100%;
+}
+
+.detailsHeaderTitle {
+	display: flex;
+	align-items: center;
+	gap: $grid-unit-10;
+	min-inline-size: 0;
+}
+
+.detailsHeaderActions {
+	display: flex;
+	align-items: center;
+	gap: $grid-unit-10;
+}
+
+.detailsBody {
+	display: flex;
+	flex-direction: column;
+	gap: $grid-unit-10;
+}
+
+.detailsSummary {
+	font-size: 14px;
+	font-weight: 500;
+	color: #1e1e1e;
+}
+
+.detailsMeta {
+	display: flex;
+	align-items: center;
+	gap: $grid-unit-05;
+	color: #757575;
+	font-size: 13px;
+}
+
+.detailsPlaceholder {
+	min-block-size: 300px;
+}
+
+// "Files" section inside the details card. Sits below the meta row and
+// holds the FileBrowser tree. A subtle top border separates it from
+// the summary.
+.fileBrowserSection {
+	margin-block-start: $grid-unit-20;
+	padding-block-start: $grid-unit-20;
+	border-block-start: 1px solid #dcdcde;
+}
+
+.fileBrowserSectionTitle {
+	font-size: 13px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #757575;
+	margin-block-end: $grid-unit-10;
+}
+
+// DataViews in a `Card` gets a few local overrides to match Calypso's
+// backup overview 1:1.
+.listCard {
+
+	// Clip children to the card's rounded corners so the inner
+	// view-actions row / first list divider doesn't show white
+	// corners peeking through the border-radius.
+	overflow: hidden;
+
+	// Drop the default `CardBody` padding so list rows, filter panel, and
+	// pagination can run edge-to-edge (dividers extend full card width).
+	// We re-add padding on the search/view-actions row below so the
+	// search input still has breathing room against the card edge.
+	:global(.components-card__body) {
+		padding: 0;
+	}
+
+	// Breathing room around the search + layout-switcher + view-config
+	// row only. Matches Calypso where the search bar sits a bit inset
+	// from the card edge while the list below is flush.
+	:global(.dataviews__view-actions) {
+		padding: $grid-unit-20 $grid-unit-20 $grid-unit-10;
+	}
+
+	// WP DataViews renders a `role="checkbox"` selection indicator in the
+	// list layout whenever `selection` is driven externally. The backup
+	// list uses click-to-select with the selected row visually highlighted
+	// by the default DataViews row state, so the checkbox is redundant.
+	:global(.dataviews-selection-checkbox) {
+		display: none;
+	}
+
+	// Center the gridicon inside the 52×52 media placeholder. The Icon
+	// element has no intrinsic positioning, so it would otherwise sit in
+	// the top-left of the box. Mirrors Calypso's
+	// `.dashboard-backups__list-icon` absolute-center trick with a
+	// simpler flexbox approach.
+	:global(.dataviews-view-list__media-wrapper) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #757575;
+	}
+
+	// Keep the date + content-text metadata on a single line with a
+	// neutral gap, then truncate overflow so long backup stats don't
+	// push below the title. Without this DataViews' default
+	// `flex-wrap: wrap` pushes each field to its own line at the list
+	// pane's width.
+	:global(.dataviews-view-list__fields) {
+		flex-wrap: nowrap;
+		overflow: hidden;
+	}
+
+	:global(.dataviews-view-list__field-value) {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-inline-size: 0;
+	}
+
+	// Vertically center the pagination pieces (PAGE label, page-size
+	// dropdown, OF N label, prev/next icon buttons). Their individual
+	// heights differ slightly so the default `align-items: stretch`
+	// leaves the label text looking off-baseline.
+	:global(.dataviews-footer),
+	:global(.dataviews-footer__content),
+	:global(.dataviews-pagination) {
+		align-items: center;
+	}
+}
