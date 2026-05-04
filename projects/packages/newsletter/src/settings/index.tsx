@@ -2,25 +2,12 @@
  * External dependencies
  */
 import analytics from '@automattic/jetpack-analytics';
-import {
-	AdminPage,
-	Col,
-	Container,
-	GlobalNotices,
-	useGlobalNotices,
-} from '@automattic/jetpack-components';
-import { useConnection, getUserConnectionUrl } from '@automattic/jetpack-connection';
-import { getSiteType, isSimpleSite } from '@automattic/jetpack-script-data';
+import { getSiteType } from '@automattic/jetpack-script-data';
 import { Notice, Disabled, Spinner } from '@wordpress/components';
-import {
-	createInterpolateElement,
-	createRoot,
-	useCallback,
-	useEffect,
-	useState,
-	useMemo,
-} from '@wordpress/element';
+import { useDispatch } from '@wordpress/data';
+import { useCallback, useEffect, useState, useMemo } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
+import { store as noticesStore } from '@wordpress/notices';
 import { Stack } from '@wordpress/ui';
 /**
  * Internal dependencies
@@ -32,7 +19,6 @@ import {
 	EmailBylineSection,
 	EmailSenderSettingsSection,
 	EmailReplyToSettingsSection,
-	NewsletterSection,
 	NewsletterCategoriesSection,
 	PaidNewsletterSection,
 	SubscriptionsSection,
@@ -62,6 +48,12 @@ function normalizeSettings( settings: Record< string, unknown > ): NewsletterSet
 
 /**
  * Newsletter Settings App
+ *
+ * Renders all manual- and auto-save sections in IA order:
+ * Subscribe placements → Email customization → Paid content → Newsletter
+ * categories. The product activation toggle (formerly `NewsletterSection`)
+ * lives outside this UI now — driven by the global Newsletter product
+ * control — so we no longer render that card here.
  *
  * @return {JSX.Element | null} The newsletter settings component or null.
  */
@@ -97,20 +89,9 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 	// Get newsletter script data
 	const newsletterScriptData = useMemo( () => getNewsletterScriptData(), [] );
 
-	// Check if the site has a connected owner.
-	// On Simple sites, users are always connected — skip the check.
-	const { hasConnectedOwner: rawHasConnectedOwner } = useConnection();
-	const hasConnectedOwner = isSimpleSite() || rawHasConnectedOwner;
-	const connectUrl = useMemo(
-		() =>
-			getUserConnectionUrl( {
-				from: 'jetpack-newsletter',
-			} ),
-		[]
-	);
-
-	// Global notices for success/error messages
-	const { createSuccessNotice, createErrorNotice } = useGlobalNotices();
+	// Global notices for success/error messages — boot's layout renders the
+	// snackbar slot, so we just dispatch into @wordpress/notices.
+	const { createSuccessNotice, createErrorNotice } = useDispatch( noticesStore );
 
 	// Get site type for analytics
 	const siteType = useMemo( () => getSiteType(), [] );
@@ -182,9 +163,7 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 				.catch( ( err: Error ) => {
 					// eslint-disable-next-line no-console
 					console.error( 'Newsletter settings auto-save error:', err );
-					createErrorNotice( err.message || __( 'Failed to save settings', 'jetpack-newsletter' ), {
-						explicitDismiss: true,
-					} );
+					createErrorNotice( err.message || __( 'Failed to save settings', 'jetpack-newsletter' ) );
 					// Revert optimistic update on error
 					setData( data );
 				} );
@@ -217,8 +196,7 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 				// eslint-disable-next-line no-console
 				console.error( 'Newsletter sender name save error:', err );
 				createErrorNotice(
-					err.message || __( 'Failed to save sender name', 'jetpack-newsletter' ),
-					{ explicitDismiss: true }
+					err.message || __( 'Failed to save sender name', 'jetpack-newsletter' )
 				);
 			} )
 			.finally( () => {
@@ -251,8 +229,7 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 				// eslint-disable-next-line no-console
 				console.error( 'Newsletter subscription settings save error:', err );
 				createErrorNotice(
-					err.message || __( 'Failed to save subscription settings', 'jetpack-newsletter' ),
-					{ explicitDismiss: true }
+					err.message || __( 'Failed to save subscription settings', 'jetpack-newsletter' )
 				);
 			} )
 			.finally( () => {
@@ -306,8 +283,7 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 				// eslint-disable-next-line no-console
 				console.error( 'Newsletter categories save error:', err );
 				createErrorNotice(
-					err.message || __( 'Failed to save newsletter categories', 'jetpack-newsletter' ),
-					{ explicitDismiss: true }
+					err.message || __( 'Failed to save newsletter categories', 'jetpack-newsletter' )
 				);
 			} )
 			.finally( () => {
@@ -340,8 +316,7 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 				// eslint-disable-next-line no-console
 				console.error( 'Newsletter welcome email save error:', err );
 				createErrorNotice(
-					err.message || __( 'Failed to save welcome email message', 'jetpack-newsletter' ),
-					{ explicitDismiss: true }
+					err.message || __( 'Failed to save welcome email message', 'jetpack-newsletter' )
 				);
 			} )
 			.finally( () => {
@@ -351,43 +326,19 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 
 	if ( isLoading ) {
 		return (
-			<AdminPage
-				title={ 'Newsletter' /** "Newsletter" is a product name, do not translate. */ }
-				subTitle={ __(
-					'Transform your blog posts into newsletters to easily reach your subscribers.',
-					'jetpack-newsletter'
-				) }
-			>
-				<Container horizontalSpacing={ 3 }>
-					<Col>
-						<div className="newsletter-settings">
-							<Spinner />
-						</div>
-					</Col>
-				</Container>
-			</AdminPage>
+			<div className="newsletter-settings">
+				<Spinner />
+			</div>
 		);
 	}
 
 	if ( error ) {
 		return (
-			<AdminPage
-				title={ 'Newsletter' /** "Newsletter" is a product name, do not translate. */ }
-				subTitle={ __(
-					'Transform your blog posts into newsletters to easily reach your subscribers.',
-					'jetpack-newsletter'
-				) }
-			>
-				<Container horizontalSpacing={ 3 }>
-					<Col>
-						<div className="newsletter-settings newsletter-settings--error">
-							<Notice status="error" isDismissible={ false }>
-								{ error }
-							</Notice>
-						</div>
-					</Col>
-				</Container>
-			</AdminPage>
+			<div className="newsletter-settings newsletter-settings--error">
+				<Notice status="error" isDismissible={ false }>
+					{ error }
+				</Notice>
+			</div>
 		);
 	}
 
@@ -400,116 +351,75 @@ export function NewsletterSettingsApp(): JSX.Element | null {
 	const hasNewsletterCategoriesChanges = Object.keys( newsletterCategoriesChanges ).length > 0;
 	const hasWelcomeEmailChanges = Object.keys( welcomeEmailChanges ).length > 0;
 
+	const isNewsletterEnabled = data.subscriptions;
+
 	return (
-		<AdminPage
-			title={ 'Newsletter' /** "Newsletter" is a product name, do not translate. */ }
-			subTitle={ __(
-				'Transform your blog posts into newsletters to easily reach your subscribers.',
-				'jetpack-newsletter'
-			) }
-		>
-			<GlobalNotices />
-			<Container horizontalSpacing={ 0 }>
-				<Col>
-					<div id="jp-admin-notices" className="newsletter-jitm-card" />
-				</Col>
-			</Container>
-			<Container horizontalSpacing={ 3 }>
-				<Col>
-					{ ! hasConnectedOwner && (
-						<div className="newsletter-settings-connect-notice">
-							<Notice status="warning" isDismissible={ false }>
-								{ createInterpolateElement(
-									__(
-										'Connect your WordPress.com account to enable and set up your newsletter. <a>Connect now</a>',
-										'jetpack-newsletter'
-									),
-									{
-										a: <a href={ connectUrl } />,
-									}
-								) }
-							</Notice>
-						</div>
-					) }
-					<Disabled
-						isDisabled={ ! hasConnectedOwner }
-						className={ ! hasConnectedOwner ? 'newsletter-settings-disabled' : undefined }
-					>
-						<Stack gap="md" direction="column" className="newsletter-settings">
-							<NewsletterSection data={ data } onChange={ handleAutoSave } />
+		<>
+			<div id="jp-admin-notices" className="newsletter-jitm-card" />
+			<Disabled isDisabled={ ! isNewsletterEnabled }>
+				<Stack gap="lg" direction="column" className="newsletter-settings">
+					{ /* IA order:
+					     1. Paid content (monetization sits above the funnel)
+					     2. Subscribe placements
+					     3. Email customization (5 sections)
+					     4. Newsletter categories */ }
+					<PaidNewsletterSection isNewsletterEnabled={ isNewsletterEnabled } />
 
-							<Disabled isDisabled={ ! data.subscriptions }>
-								<Stack gap="md" direction="column">
-									<SubscriptionsSection
-										data={ data }
-										onChange={ handleSubscriptionChange }
-										onSave={ saveSubscriptionSettings }
-										isSaving={ isSavingSubscriptions }
-										hasChanges={ hasSubscriptionChanges }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
+					<SubscriptionsSection
+						data={ data }
+						onChange={ handleSubscriptionChange }
+						onSave={ saveSubscriptionSettings }
+						isSaving={ isSavingSubscriptions }
+						hasChanges={ hasSubscriptionChanges }
+						changedKeys={ Object.keys( subscriptionChanges ) }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
 
-									<PaidNewsletterSection
-										isNewsletterEnabled={ data.subscriptions }
-										hasActivePlan={ data.newsletter_has_active_plan }
-									/>
+					<EmailContentSection
+						data={ data }
+						onChange={ handleAutoSave }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
+					<EmailBylineSection
+						data={ data }
+						onChange={ handleAutoSave }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
+					<EmailSenderSettingsSection
+						data={ data }
+						onChange={ handleSenderNameChange }
+						onSave={ saveSenderName }
+						isSaving={ isSavingSenderName }
+						hasChanges={ hasSenderNameChanges }
+						changedKeys={ Object.keys( senderNameChanges ) }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
+					<EmailReplyToSettingsSection
+						data={ data }
+						onChange={ handleAutoSave }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
+					<WelcomeEmailSection
+						data={ data }
+						onChange={ handleWelcomeEmailChange }
+						onSave={ saveWelcomeEmail }
+						isSaving={ isSavingWelcomeEmail }
+						hasChanges={ hasWelcomeEmailChanges }
+						changedKeys={ Object.keys( welcomeEmailChanges ) }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
 
-									<NewsletterCategoriesSection
-										data={ data }
-										onChange={ handleNewsletterCategoriesChange }
-										onSave={ saveNewsletterCategories }
-										isSaving={ isSavingNewsletterCategories }
-										hasChanges={ hasNewsletterCategoriesChanges }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-
-									<EmailContentSection
-										data={ data }
-										onChange={ handleAutoSave }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-
-									<EmailBylineSection
-										data={ data }
-										onChange={ handleAutoSave }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-
-									<EmailSenderSettingsSection
-										data={ data }
-										onChange={ handleSenderNameChange }
-										onSave={ saveSenderName }
-										isSaving={ isSavingSenderName }
-										hasChanges={ hasSenderNameChanges }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-
-									<EmailReplyToSettingsSection
-										data={ data }
-										onChange={ handleAutoSave }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-
-									<WelcomeEmailSection
-										data={ data }
-										onChange={ handleWelcomeEmailChange }
-										onSave={ saveWelcomeEmail }
-										isSaving={ isSavingWelcomeEmail }
-										hasChanges={ hasWelcomeEmailChanges }
-										isNewsletterEnabled={ data.subscriptions }
-									/>
-								</Stack>
-							</Disabled>
-						</Stack>
-					</Disabled>
-				</Col>
-			</Container>
-		</AdminPage>
+					<NewsletterCategoriesSection
+						data={ data }
+						onChange={ handleNewsletterCategoriesChange }
+						onSave={ saveNewsletterCategories }
+						isSaving={ isSavingNewsletterCategories }
+						hasChanges={ hasNewsletterCategoriesChanges }
+						changedKeys={ Object.keys( newsletterCategoriesChanges ) }
+						isNewsletterEnabled={ isNewsletterEnabled }
+					/>
+				</Stack>
+			</Disabled>
+		</>
 	);
-}
-
-const container = document.getElementById( 'newsletter-settings-root' );
-if ( container ) {
-	const root = createRoot( container );
-	root.render( <NewsletterSettingsApp /> );
 }

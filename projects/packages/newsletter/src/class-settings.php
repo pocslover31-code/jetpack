@@ -1,6 +1,6 @@
 <?php
 /**
- * A class that adds a newsletter settings screen to wp-admin.
+ * A class that adds the unified Newsletter screen to wp-admin.
  *
  * @package automattic/jetpack-newsletter
  */
@@ -8,22 +8,45 @@
 namespace Automattic\Jetpack\Newsletter;
 
 use Automattic\Jetpack\Admin_UI\Admin_Menu;
-use Automattic\Jetpack\Assets;
 use Automattic\Jetpack\Connection\Manager as Connection_Manager;
 use Automattic\Jetpack\Modules;
 use Automattic\Jetpack\Redirect;
 use Automattic\Jetpack\Status;
 use Automattic\Jetpack\Status\Host;
+use Automattic\Jetpack\WP_Build_Polyfills\WP_Build_Polyfills;
 use Jetpack_Tracks_Client;
 
 /**
- * A class responsible for adding a newsletter settings screen to wp-admin.
+ * A class responsible for adding the unified Newsletter screen to wp-admin.
+ *
+ * The page is built on @wordpress/admin-ui's `Page` and the wp-build pipeline
+ * (mirroring the Subscribers Dashboard chassis), and exposes two routes —
+ * `/` (Subscribers, placeholder until Phase 2) and `/settings` — under one
+ * admin menu item.
  */
 class Settings {
 
 	const PACKAGE_VERSION = '0.8.5';
+
 	/**
-	 * Whether the class has been initialized
+	 * URL-facing menu slug. Stays at the historical `jetpack-newsletter` so
+	 * existing bookmarks, support docs, and deep links keep working.
+	 *
+	 * @var string
+	 */
+	const ADMIN_SLUG = 'jetpack-newsletter';
+
+	/**
+	 * Internal slug emitted by `@wordpress/build` (`wpPlugin.pages[0]` plus
+	 * the `-wp-admin` suffix the build template appends). Used to find the
+	 * auto-generated render / enqueue functions and to mount the boot app.
+	 *
+	 * @var string
+	 */
+	const WP_BUILD_SLUG = 'jetpack-newsletter-wp-admin';
+
+	/**
+	 * Whether the class has been initialized.
 	 *
 	 * @var boolean
 	 */
@@ -50,28 +73,37 @@ class Settings {
 
 	/**
 	 * Determine whether to show the Newsletter menu item.
-	 * When true, shown regardless of subscriptions module state.
+	 *
+	 * The unified page no longer carries the activation toggle (that lives on
+	 * the global Newsletter product control), so when the Subscriptions
+	 * module is off there's nothing actionable inside this page — hide it
+	 * entirely. Sites can override via `jetpack_show_newsletter_menu_item`
+	 * if they need the page reachable through the menu while the module is
+	 * off (the page itself remains accessible via direct URL regardless).
 	 *
 	 * @return bool
 	 */
 	private function should_show_menu_item() {
 		/**
 		 * Filter to control Newsletter menu item visibility.
-		 * Defaults to true.
+		 *
+		 * Defaults to true when the Subscriptions module is active, false
+		 * otherwise.
 		 *
 		 * @since 0.6.0
 		 * @param bool $show Whether to show the menu item.
 		 */
-		return apply_filters(
-			'jetpack_show_newsletter_menu_item',
-			true
-		);
+		return apply_filters( 'jetpack_show_newsletter_menu_item', $this->is_subscriptions_active() );
 	}
 
 	/**
 	 * Subscribe to necessary hooks.
 	 */
 	public function init_hooks() {
+		self::load_wp_build();
+		self::fix_boot_import_map_ordering();
+		self::bridge_wp_build_enqueue();
+
 		// Add the Reading settings notice as long as subscriptions are active.
 		if ( $this->is_subscriptions_active() ) {
 			add_action( 'admin_init', array( $this, 'add_reading_page_notice' ) );
@@ -103,7 +135,127 @@ class Settings {
 	}
 
 	/**
-	 * Add the newsletter settings submenu to the Jetpack menu.
+	 * Load wp-build generated registration files. Mirrors Forms / Subscribers.
+	 */
+	public static function load_wp_build() {
+		// Polyfill `@wordpress/boot`, `@wordpress/route`, `@wordpress/a11y` modules
+		// + `wp-theme`, `wp-views`, `wp-private-apis`, `wp-notices` classic-script
+		// handles for sites running WP without the script-modules these depend on.
+		WP_Build_Polyfills::register(
+			'jetpack-newsletter',
+			array_merge( WP_Build_Polyfills::SCRIPT_HANDLES, WP_Build_Polyfills::MODULE_IDS )
+		);
+
+		$wp_build_index = dirname( __DIR__ ) . '/build/build.php';
+		if ( file_exists( $wp_build_index ) ) {
+			require_once $wp_build_index;
+		}
+
+		// `page.php` ships an `admin_init` interceptor that takes over our slug
+		// with a standalone (non-wp-admin) render. We want the wp-admin
+		// integrated experience, so unregister it as soon as it's loaded.
+		remove_action(
+			'admin_init',
+			'jetpack_newsletter_jetpack_newsletter_intercept_render'
+		);
+	}
+
+	/**
+	 * Bridge wp-build's auto-generated enqueue function — which checks for
+	 * `?page=jetpack-newsletter-wp-admin` — to our user-facing slug
+	 * `?page=jetpack-newsletter`. Hooked at priority 9 so the wp-build copy
+	 * (registered at priority 10) sees the original `$_GET['page']` and
+	 * skips its own enqueue.
+	 */
+	public static function bridge_wp_build_enqueue() {
+		add_action(
+			'admin_enqueue_scripts',
+			static function ( $hook_suffix ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				if ( ! isset( $_GET['page'] ) || self::ADMIN_SLUG !== $_GET['page'] ) {
+					return;
+				}
+
+				$enqueue_fn = 'jetpack_newsletter_jetpack_newsletter_wp_admin_enqueue_scripts';
+				if ( ! function_exists( $enqueue_fn ) ) {
+					return;
+				}
+
+				// phpcs:disable WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$original     = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : null;
+				$_GET['page'] = self::WP_BUILD_SLUG;
+				call_user_func( $enqueue_fn, $hook_suffix );
+				if ( null === $original ) {
+					unset( $_GET['page'] );
+				} else {
+					$_GET['page'] = $original;
+				}
+				// phpcs:enable WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			},
+			9
+		);
+	}
+
+	/**
+	 * Fix import map ordering for the wp-build boot script.
+	 *
+	 * In wp-admin, _wp_footer_scripts (classic scripts) and print_import_map
+	 * both hook into admin_print_footer_scripts at priority 10, but
+	 * _wp_footer_scripts is registered first. This causes the inline
+	 * import("@wordpress/boot") to execute before the import map exists.
+	 *
+	 * This fix moves the import() call from the classic inline script to a
+	 * <script type="module"> printed at priority 20 (after the import map).
+	 *
+	 * @todo Remove once @wordpress/build ships with the loader.js fix upstream
+	 *       (WordPress/gutenberg#76870) and Jetpack updates the dependency.
+	 */
+	public static function fix_boot_import_map_ordering() {
+		$handle = self::WP_BUILD_SLUG . '-prerequisites';
+
+		add_action(
+			'admin_enqueue_scripts',
+			static function () use ( $handle ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				if ( ! isset( $_GET['page'] ) || self::ADMIN_SLUG !== $_GET['page'] ) {
+					return;
+				}
+
+				$data = wp_scripts()->get_data( $handle, 'after' );
+				if ( empty( $data ) ) {
+					return;
+				}
+
+				$boot_script = null;
+				$remaining   = array();
+				foreach ( $data as $line ) {
+					if ( strpos( $line, '@wordpress/boot' ) !== false ) {
+						$boot_script = $line;
+					} else {
+						$remaining[] = $line;
+					}
+				}
+
+				if ( null === $boot_script ) {
+					return;
+				}
+
+				wp_scripts()->add_data( $handle, 'after', $remaining );
+
+				add_action(
+					'admin_print_footer_scripts',
+					static function () use ( $boot_script ) {
+						wp_print_inline_script_tag( $boot_script, array( 'type' => 'module' ) );
+					},
+					20
+				);
+			},
+			PHP_INT_MAX
+		);
+	}
+
+	/**
+	 * Add the unified Newsletter menu item.
 	 *
 	 * Note: This method is NOT called on wpcom Simple sites. Simple sites use
 	 * add_wp_admin_submenu() called from wpcom-admin-menu.php instead.
@@ -120,6 +272,9 @@ class Settings {
 		$show_menu   = $this->should_show_menu_item();
 		$parent_slug = $show_menu ? 'jetpack' : '';
 
+		$render_fn = 'jetpack_newsletter_jetpack_newsletter_wp_admin_render_page';
+		$callback  = function_exists( $render_fn ) ? $render_fn : array( $this, 'render' );
+
 		// On Atomic, use add_submenu_page. On standalone Jetpack, use Admin_Menu when showing in menu.
 		$use_jetpack_menu = ! $host->is_woa_site() && $show_menu;
 
@@ -130,8 +285,8 @@ class Settings {
 				'Newsletter',
 				'Newsletter',
 				'manage_options',
-				'jetpack-newsletter',
-				array( $this, 'render' ),
+				self::ADMIN_SLUG,
+				$callback,
 				10
 			);
 		} else {
@@ -141,8 +296,8 @@ class Settings {
 				'Newsletter',
 				'Newsletter',
 				'manage_options',
-				'jetpack-newsletter',
-				array( $this, 'render' )
+				self::ADMIN_SLUG,
+				$callback
 			);
 		}
 
@@ -152,23 +307,25 @@ class Settings {
 	}
 
 	/**
-	 * Add the newsletter settings submenu directly under the Jetpack menu.
+	 * Add the unified Newsletter submenu directly under the Jetpack menu.
 	 *
 	 * This method is called from wpcom-admin-menu.php on Simple sites at late priority
 	 * (999999) when the Jetpack menu already exists.
-	 *
-	 * Similar to Subscribers_Dashboard::add_wp_admin_submenu().
 	 */
 	public function add_wp_admin_submenu() {
 		$parent_slug = $this->should_show_menu_item() ? 'jetpack' : '';
+
+		$render_fn = 'jetpack_newsletter_jetpack_newsletter_wp_admin_render_page';
+		$callback  = function_exists( $render_fn ) ? $render_fn : array( $this, 'render' );
+
 		$page_suffix = add_submenu_page(
 			$parent_slug,
 			/** "Newsletter" is a product name, do not translate. */
 			'Newsletter',
 			'Newsletter',
 			'manage_options',
-			'jetpack-newsletter',
-			array( $this, 'render' )
+			self::ADMIN_SLUG,
+			$callback
 		);
 
 		if ( $page_suffix ) {
@@ -178,10 +335,14 @@ class Settings {
 
 	/**
 	 * Admin init actions.
+	 *
+	 * The wp-build-generated enqueue (registered via load_wp_build) handles the
+	 * boot scripts and styles. We still expose newsletter-specific data via
+	 * jetpack_admin_js_script_data so the React app can read connection /
+	 * blog identifiers without a separate REST roundtrip.
 	 */
 	public function admin_init() {
 		add_filter( 'jetpack_admin_js_script_data', array( $this, 'add_script_data' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'load_admin_scripts' ) );
 	}
 
 	/**
@@ -204,7 +365,7 @@ class Settings {
 		$is_block_theme         = wp_is_block_theme();
 		$setup_payment_plan_url = ( $is_wpcom ? 'https://wordpress.com/earn/payments/' : 'https://cloud.jetpack.com/monetize/payments/' ) . rawurlencode( $site_raw_url );
 
-		$wp_admin_subscriber_management_enabled = apply_filters( 'jetpack_wp_admin_subscriber_management_enabled', false );
+		$wp_admin_subscriber_management_enabled = apply_filters( 'jetpack_wp_admin_subscriber_management_enabled', true );
 
 		// Populate blog_id which is needed for API calls on Simple sites.
 		$data['site']['wpcom']['blog_id'] = $blog_id;
@@ -219,6 +380,7 @@ class Settings {
 			'gravatar'                        => get_avatar_url( $current_user->ID ),
 			'dateExample'                     => gmdate( get_option( 'date_format' ), time() ),
 			'subscriberManagementUrl'         => $this->get_subscriber_management_url( $wp_admin_subscriber_management_enabled, $is_wpcom, $site_raw_url, $blog_id ),
+			'subscriberManagementEnabled'     => (bool) $wp_admin_subscriber_management_enabled,
 			'isSubscriptionSiteEditSupported' => $is_block_theme,
 			'setupPaymentPlansUrl'            => $setup_payment_plan_url,
 			'isSitePublic'                    => ! $status->is_private_site() && ! $status->is_coming_soon(),
@@ -229,29 +391,9 @@ class Settings {
 	}
 
 	/**
-	 * Load the admin scripts.
-	 */
-	public function load_admin_scripts() {
-		Assets::register_script(
-			'jetpack-newsletter',
-			'../build/newsletter.js',
-			__FILE__,
-			array(
-				'in_footer'    => true,
-				'textdomain'   => 'jetpack-newsletter',
-				'enqueue'      => true,
-				'dependencies' => array( 'jetpack-script-data' ),
-			)
-		);
-
-		// Enqueue the Tracks script for analytics.
-		wp_enqueue_script( 'jp-tracks', '//stats.wp.com/w.js', array(), gmdate( 'YW' ), true );
-	}
-
-	/**
 	 * Get the subscriber management URL based on site type and filter settings.
 	 *
-	 * - If jetpack_wp_admin_subscriber_management_enabled filter is true: wp-admin subscribers page
+	 * - If jetpack_wp_admin_subscriber_management_enabled filter is true: in-admin Newsletter page
 	 * - If filter is false AND wpcom site: wordpress.com/subscribers/$domain
 	 * - If filter is false AND Jetpack site: jetpack.com redirect URL
 	 *
@@ -262,9 +404,9 @@ class Settings {
 	 * @return string The subscriber management URL.
 	 */
 	private function get_subscriber_management_url( $wp_admin_enabled, $is_wpcom, $site_raw_url, $blog_id ) {
-		// If wp-admin subscriber management is enabled, use the wp-admin page.
+		// If wp-admin subscriber management is enabled, point at the unified Newsletter page.
 		if ( $wp_admin_enabled ) {
-			return admin_url( 'admin.php?page=subscribers' );
+			return Urls::get_newsletter_settings_url();
 		}
 
 		// For wpcom sites, use the wordpress.com URL.
@@ -285,12 +427,13 @@ class Settings {
 	}
 
 	/**
-	 * Render the newsletter settings page.
+	 * Fallback render when wp-build's generated function is not available.
+	 *
+	 * In normal use the menu callback is the auto-generated render function
+	 * from `build/pages/jetpack-newsletter/page-wp-admin.php`.
 	 */
 	public function render() {
-		?>
-		<div id="newsletter-settings-root"></div>
-		<?php
+		echo '<div id="' . esc_attr( self::WP_BUILD_SLUG ) . '-app" class="boot-layout-container"></div>';
 	}
 
 	/**
