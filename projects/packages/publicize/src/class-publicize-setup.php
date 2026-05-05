@@ -161,6 +161,8 @@ class Publicize_Setup {
 		// Things that should not happen on WPCOM.
 		if ( ! $is_wpcom_simple ) {
 			add_action( 'rest_api_init', array( new REST_Controller(), 'register_rest_routes' ) );
+
+			Standard_Site_Integration::init();
 		}
 	}
 
