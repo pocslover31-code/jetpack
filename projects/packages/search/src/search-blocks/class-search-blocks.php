@@ -82,6 +82,7 @@ class Search_Blocks {
 	public static function init() {
 		add_action( 'init', array( static::class, 'register_blocks' ) );
 		add_action( 'init', array( static::class, 'register_search_template' ) );
+		add_action( 'init', array( static::class, 'register_i18n_module' ) );
 		add_filter( 'block_categories_all', array( static::class, 'register_block_category' ) );
 		add_filter( 'search_template_hierarchy', array( static::class, 'prepend_search_template' ) );
 		// FSE block-template rendering runs *before* `wp_head()` (see
@@ -92,6 +93,7 @@ class Search_Blocks {
 		// deep-merge no-op and keeps classic-theme paths covered.
 		add_action( 'template_redirect', array( static::class, 'seed_interactivity_state' ) );
 		add_action( 'wp_enqueue_scripts', array( static::class, 'seed_interactivity_state' ) );
+		add_action( 'wp_enqueue_scripts', array( static::class, 'enqueue_i18n_runtime' ) );
 		add_action( 'enqueue_block_editor_assets', array( static::class, 'enqueue_editor_assets' ) );
 	}
 
@@ -165,6 +167,61 @@ class Search_Blocks {
 			$asset['version'] ?? false,
 			true
 		);
+	}
+
+	/**
+	 * Register `@wordpress/i18n` as a script module pointing at the package's
+	 * shim. The shim re-exports the live functions on `window.wp.i18n`,
+	 * letting the IAPI view bundle use `import { __, _n, sprintf } from
+	 * '@wordpress/i18n'` natively while sharing the same translation runtime
+	 * the classic `wp-i18n` script provides — and that
+	 * `wp.jpI18nLoader.downloadI18n()` populates with per-bundle translations.
+	 *
+	 * WP core only registers `@wordpress/interactivity` (and recently a11y /
+	 * router) as script modules, so the canonical `@wordpress/i18n` ID is
+	 * unclaimed today; we register the shim under that ID so any future
+	 * cross-package converger can find it. `wp_register_script_module()` is
+	 * first-registered-wins, so if WP core later ships a native `@wordpress/i18n`
+	 * module at the same priority this method should be removed (or
+	 * deregister-then-register) to let core take over.
+	 */
+	public static function register_i18n_module() {
+		if ( ! function_exists( 'wp_register_script_module' ) ) {
+			return;
+		}
+		$base_path  = Package::get_installed_path() . 'build/search-blocks/store/';
+		$shim_path  = $base_path . 'i18n-shim.js';
+		$asset_file = $base_path . 'i18n-shim.asset.php';
+		if ( ! file_exists( $shim_path ) || ! file_exists( $asset_file ) ) {
+			return;
+		}
+		$asset    = require $asset_file;
+		$shim_url = plugins_url( 'i18n-shim.js', $shim_path );
+		wp_register_script_module(
+			'@wordpress/i18n',
+			$shim_url,
+			array(),
+			$asset['version'] ?? false
+		);
+	}
+
+	/**
+	 * Enqueue the classic `wp-i18n` script and the `wp-jp-i18n-loader` runtime
+	 * (registered by `Automattic\Jetpack\Assets`) on every page. The shim
+	 * registered by `register_i18n_module()` re-exports `wp.i18n` from the
+	 * classic script, and `wp.jpI18nLoader.downloadI18n( bundlePath,
+	 * 'jetpack-search-pkg', 'plugin' )` (called from `store/i18n-bootstrap.js`)
+	 * fetches and `setLocaleData()`s the per-bundle translation .json — the
+	 * same path `@automattic/i18n-loader-webpack-plugin` injects into
+	 * classic-script bundles. We're just opting our front-end view bundles
+	 * into the existing pipeline.
+	 */
+	public static function enqueue_i18n_runtime() {
+		if ( ! function_exists( 'wp_enqueue_script' ) ) {
+			return;
+		}
+		wp_enqueue_script( 'wp-i18n' );
+		wp_enqueue_script( 'wp-jp-i18n-loader' );
 	}
 
 	/**
@@ -653,15 +710,6 @@ class Search_Blocks {
 			// string on first paint; `actions.search()` keeps it in lockstep
 			// with `isLoading` / `totalResults` via `computeResultsCountText`.
 			'resultsCountText' => $is_initial_loading ? $searching_text : '',
-
-			// Translated view-bundle strings. The Interactivity API view bundle
-			// can't import @wordpress/i18n (only @wordpress/interactivity is
-			// registered as a script module), so any JS-produced text is seeded
-			// here and read via state.strings.* on the client. Both _n() forms
-			// are seeded so the client can pick based on the live totalResults
-			// without a round trip; languages with more than two plural forms
-			// degrade to "plural for all count > 1" as an accepted tradeoff.
-			'strings'          => static::build_initial_strings(),
 		);
 	}
 
@@ -774,31 +822,6 @@ class Search_Blocks {
 					'wrapperHidden' => ! $show_wrapper,
 				)
 			)
-		);
-	}
-
-	/**
-	 * Seed translated view-bundle strings for the Interactivity API store.
-	 *
-	 * @return array<string, string>
-	 */
-	protected static function build_initial_strings(): array {
-		if ( ! function_exists( '__' ) || ! function_exists( '_n' ) ) {
-			return array(
-				'searching'          => 'Searching…',
-				'resultsCountSingle' => 'Found %d result',
-				'resultsCountPlural' => 'Found %d results',
-				'removeFilter'       => 'Remove %s',
-			);
-		}
-		return array(
-			'searching'          => __( 'Searching…', 'jetpack-search-pkg' ),
-			/* translators: %d: number of results. */
-			'resultsCountSingle' => _n( 'Found %d result', 'Found %d results', 1, 'jetpack-search-pkg' ),
-			/* translators: %d: number of results. */
-			'resultsCountPlural' => _n( 'Found %d result', 'Found %d results', 2, 'jetpack-search-pkg' ),
-			/* translators: %s: filter label (e.g. "Category: News"). Announced by screen readers when focus lands on a filter pill's remove button. */
-			'removeFilter'       => __( 'Remove %s', 'jetpack-search-pkg' ),
 		);
 	}
 

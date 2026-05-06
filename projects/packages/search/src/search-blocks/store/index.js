@@ -1,3 +1,4 @@
+import { __, _n, sprintf } from '@wordpress/i18n';
 import {
 	store,
 	getContext,
@@ -5,6 +6,7 @@ import {
 } from '@wordpress/interactivity';
 import { buildSearchUrl, formatDateBucketLabel } from './api';
 import { bucketLabel, bucketValue } from './bucket-key';
+import { bootstrapI18n } from './i18n-bootstrap';
 import { isEventInsidePopoverRoot } from './popover-events';
 import { countActiveFilters, normalizeResult } from './result-utils';
 import {
@@ -13,6 +15,14 @@ import {
 	getSortMenuOptionKeysFromTrigger,
 } from './sort-menu-dom';
 import { pushStateToUrl, readStateFromUrl } from './url-state';
+
+// Trigger the per-bundle translation fetch as soon as the store module
+// loads. Every view-bundle entry imports the store, so this runs once per
+// page; the bootstrap dedupes so repeat imports are harmless. View bundles
+// with their own `__()`/`_n()` calls (e.g. active-filters/view.js) call
+// `bootstrapI18n` with their own filename so each entry's per-bundle .json
+// gets fetched.
+bootstrapI18n( 'store/index.js' );
 
 const NAMESPACE = 'jetpack-search';
 let initialized = false;
@@ -174,17 +184,17 @@ let searchToken = 0;
  */
 export function computeResultsCountText( liveState ) {
 	if ( liveState.isLoading ) {
-		return liveState.strings?.searching ?? 'Searching…';
+		return __( 'Searching…', 'jetpack-search-pkg' );
 	}
 	const total = liveState.totalResults;
 	if ( total === 0 ) {
 		return '';
 	}
-	const template =
-		total === 1
-			? liveState.strings?.resultsCountSingle ?? 'Found %d result'
-			: liveState.strings?.resultsCountPlural ?? 'Found %d results';
-	return template.replace( '%d', total );
+	return sprintf(
+		/* translators: %d: number of results. */
+		_n( 'Found %d result', 'Found %d results', total, 'jetpack-search-pkg' ),
+		total
+	);
 }
 
 /**

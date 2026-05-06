@@ -1,0 +1,4 @@
+Significance: patch
+Type: fixed
+
+Search Blocks: localize the front-end product-rating aria-label (and other Interactivity API view-bundle strings) via @wordpress/i18n on the page locale, so screen readers no longer hear English on translated stores.

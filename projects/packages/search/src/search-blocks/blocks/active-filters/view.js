@@ -1,8 +1,16 @@
+import { __, sprintf } from '@wordpress/i18n';
 import { store, getContext } from '@wordpress/interactivity';
 import { formatDateBucketLabel } from '../../store/api';
 import '../../store';
 import { bucketLabel, bucketValue } from '../../store/bucket-key';
+import { bootstrapI18n } from '../../store/i18n-bootstrap';
 import './style.scss';
+
+// Fetch translations for *this* bundle. The store module bootstraps for
+// its own filename, so result-utils strings load via that path; this one
+// covers the `__('Remove %s', ...)` call below, which lives in the
+// active-filters bundle's .json file rather than the store's.
+bootstrapI18n( 'active-filters.js' );
 
 const NAMESPACE = 'jetpack-search';
 
@@ -41,15 +49,14 @@ function resolveValueLabel( state, filterKey, filterValue ) {
 store( NAMESPACE, {
 	state: {
 		/**
-		 * Pill descriptors for `data-wp-each`. `ariaLabel` uses the "Remove %s"
-		 * format seeded from PHP because the view bundle cannot import
-		 * `@wordpress/i18n`.
+		 * Pill descriptors for `data-wp-each`. `ariaLabel` is composed via
+		 * `@wordpress/i18n` so it picks up the page's translations through
+		 * the i18n shim — see `Search_Blocks::register_i18n_module()`.
 		 *
 		 * @return {Array<object>} Pill descriptors.
 		 */
 		get activePills() {
 			const { state } = store( NAMESPACE );
-			const removeFormat = state.strings?.removeFilter ?? 'Remove %s';
 			const pills = [];
 			for ( const [ filterKey, values ] of Object.entries( state.activeFilters ?? {} ) ) {
 				if ( ! Array.isArray( values ) ) {
@@ -64,7 +71,8 @@ store( NAMESPACE, {
 						filterKey,
 						value,
 						label,
-						ariaLabel: removeFormat.replace( '%s', label ),
+						/* translators: %s: filter label (e.g. "Category: News"). Announced by screen readers when focus lands on a filter pill's remove button. */
+						ariaLabel: sprintf( __( 'Remove %s', 'jetpack-search-pkg' ), label ),
 					} );
 				}
 			}
