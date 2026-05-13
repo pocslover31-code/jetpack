@@ -1,41 +1,62 @@
-@use "$css/main/mixins";
-@use "$css/main/variables";
+.page {
+	display: flex;
+	flex-direction: column;
+}
 
-.problem {
+.header {
+	margin:
+		calc(-1 * var(--wpds-dimension-padding-2xl, 24px))
+		calc(-1 * var(--wpds-dimension-padding-2xl, 24px))
+		var(--wpds-dimension-gap-xl, 24px);
+}
 
-	img {
-		margin-top: 20px;
-		display: block;
+:global(body.jb-subpage-active) .header:global(.admin-ui-page__header) {
+	border-bottom: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+	padding-block-end: var(--wpds-dimension-padding-lg, 16px);
+
+	h1 {
+		margin: 0;
 	}
+
+	li {
+		display: flex;
+		align-items: center;
+		margin-bottom: 0;
+	}
+}
+
+.breadcrumb-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--wpds-dimension-gap-sm, 8px);
+	color: var(--wpds-color-fg-content-neutral, #1e1e1e);
+	text-decoration: none;
+
+	&:hover,
+	&:focus,
+	&:active {
+		color: var(--wpds-color-fg-interactive-brand, #2271b1);
+		text-decoration: underline;
+	}
+}
+
+.body {
+	max-width: 660px;
+	margin-inline: auto;
+	width: 100%;
 }
 
 .recommendation-animation-wrapper {
-	margin-top: 32px;
 	overflow: hidden;
 }
 
-.panel {
-	margin-top: 0;
-	position: relative;
-	border: 1px solid variables.$gray_5;
-	border-radius: 4px;
-	padding: 24px 69px 24px 27px;
+:global(body.jb-subpage-active) {
 
-	li {
-
-		@include mixins.word-wrap();
+	:global(.admin-ui-page > .admin-ui-page__header) {
+		display: none;
 	}
 
-	h4 {
-		font-size: 20px;
-		margin-bottom: 1rem;
-		font-weight: 700;
-
-		svg {
-			vertical-align: sub;
-			margin: 4px 4px 2px 0;
-			height: 20px;
-			fill: variables.$color_warning;
-		}
+	:global(.jetpack-boost-page__tabs-row) {
+		display: none;
 	}
 }

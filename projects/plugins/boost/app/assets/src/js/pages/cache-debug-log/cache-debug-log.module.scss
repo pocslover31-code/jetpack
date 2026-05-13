@@ -1,53 +1,104 @@
-@use "$css/main/variables";
+.page {
+	display: flex;
+	flex-direction: column;
+}
 
-.breadcrumbs :global(.admin-ui-breadcrumbs__list) {
-	min-height: auto;
+// Break out of `.jetpack-boost-page__content--padded`'s 24px inset so
+// the breadcrumb header spans the full body-slot width — same look as
+// the chassis's own `.admin-ui-page__header`. The header element itself
+// already wears the `admin-ui-page__header` class, so admin-ui supplies
+// the sticky + padding + background styling; the chassis's boost-page
+// rules then strip the bottom border (because the tab row owns the
+// separator in tabbed mode), so the override block below restores it.
+.header {
+	margin:
+		calc(-1 * var(--wpds-dimension-padding-2xl, 24px))
+		calc(-1 * var(--wpds-dimension-padding-2xl, 24px))
+		var(--wpds-dimension-gap-xl, 24px);
+}
+
+// boost-page.scss strips `.admin-ui-page__header`'s border via an
+// `:is(body.jetpack_page_jetpack-boost, body.toplevel_page_jetpack-boost)
+// .admin-ui-page__header` selector (specificity 0,2,1). We compound
+// `.header.admin-ui-page__header` on top of the body class to land at
+// 0,3,1 — beats the chassis override on specificity instead of relying
+// on source order.
+// Same block fixes the breadcrumb alignment: the link `<li>` is taller
+// than the heading `<li>` because the `inline-flex` anchor adds a
+// line-box descender to its `<li>`'s natural height. Promoting every
+// `<li>` to a flex container drops that descender and lines both items
+// up on a true center.
+:global(body.jb-subpage-active) .header:global(.admin-ui-page__header) {
+	border-bottom: 1px solid var(--wpds-color-stroke-surface-neutral, #e0e0e0);
+	padding-block-end: var(--wpds-dimension-padding-lg, 16px);
+
+	h1 {
+		margin: 0;
+	}
 
 	li {
 		display: flex;
 		align-items: center;
+		// wp-admin's common.css applies `li, dd { margin-bottom: 6px }`
+		// globally; reset it inside the breadcrumb so siblings align.
 		margin-bottom: 0;
 	}
-}
-
-.breadcrumb-current {
-	display: inline;
-	font-size: inherit;
-	font-weight: inherit;
-	line-height: inherit;
-	margin: 0;
 }
 
 .breadcrumb-link {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	color: inherit;
+	gap: var(--wpds-dimension-gap-sm, 8px);
+	color: var(--wpds-color-fg-content-neutral, #1e1e1e);
 	text-decoration: none;
 
 	&:hover,
 	&:focus,
 	&:active {
-		color: inherit;
+		color: var(--wpds-color-fg-interactive-brand, #2271b1);
 		text-decoration: underline;
 	}
 }
 
-.header {
-	display: flex;
-	align-items: center;
-}
-
-.copy-button:global(.components-button.is-link) {
-	margin-left: 2em;
+.body {
+	max-width: 660px;
+	margin-inline: auto;
+	width: 100%;
 }
 
 .log-text {
-	margin-top: 32px;
+	margin: 0;
+	padding: var(--wpds-dimension-gap-md, 16px);
+	background: var(--wpds-color-bg-surface-neutral-weak, #f6f7f7);
+	border: 1px solid var(--wpds-color-stroke-surface-neutral-weak, #dcdcde);
+	border-radius: var(--wpds-border-radius-md, 4px);
 	overflow-x: auto;
 	overflow-y: clip;
+	font-family: var(--wpds-typography-font-family-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+	font-size: var(--wpds-typography-font-size-sm, 12px);
+	line-height: 1.5;
+	color: var(--wpds-color-fg-content-neutral, #50575e);
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
 }
 
-.section {
-	border-top: 1px solid variables.$gray_5;
+.empty {
+	margin: 0;
+	color: var(--wpds-color-fg-content-neutral, #50575e);
+	font-size: var(--wpds-typography-font-size-md, 13px);
+}
+
+// Only the chassis-rendered `.admin-ui-page__header` (a direct child of
+// `.admin-ui-page`) gets hidden — our in-body header wears the same
+// class but is nested deeper, so it survives. Tabs row sits above the
+// scroll content so we hide it the same way.
+:global(body.jb-subpage-active) {
+
+	:global(.admin-ui-page > .admin-ui-page__header) {
+		display: none;
+	}
+
+	:global(.jetpack-boost-page__tabs-row) {
+		display: none;
+	}
 }
