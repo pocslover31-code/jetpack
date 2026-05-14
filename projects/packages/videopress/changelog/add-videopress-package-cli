@@ -1,0 +1,4 @@
+Significance: minor
+Type: added
+
+VideoPress: Add `wp videopress import` and `wp videopress batch-import` CLI commands for re-attaching VideoPress videos by GUID.

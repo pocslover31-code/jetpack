@@ -45,34 +45,103 @@ function videopress_is_valid_preload( $value ) {
 }
 
 /**
+ * Recursively convert a stdClass tree (typically from json_decode()) to a nested array.
+ *
+ * Used so attachment metadata stored under the `videopress` key can be accessed via
+ * array syntax by Automattic\Jetpack\VideoPress\Data and the rest of the consuming code,
+ * matching the structure XMLRPC::update_videopress_media_item() produces.
+ *
+ * @param mixed $value The value to convert.
+ * @return array Nested arrays in place of objects; an empty array if encoding/decoding fails or the value isn't structural.
+ */
+function videopress_object_to_array( $value ) {
+	$json = wp_json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+	if ( false === $json ) {
+		return array();
+	}
+	$decoded = json_decode( $json, true );
+	return is_array( $decoded ) ? $decoded : array();
+}
+
+/**
+ * Detect whether a post ID is occupied by an unrelated post (not the same VideoPress GUID).
+ *
+ * Used by both the import helper and the CLI's dry-run preview so the same collision
+ * rule lives in one place.
+ *
+ * @param int    $post_id Post ID to inspect.
+ * @param string $guid Video GUID we are importing.
+ * @return WP_Post|null The occupant if it's an unrelated post; null if the slot is free or already holds this GUID.
+ */
+function videopress_get_id_collision( $post_id, $guid ) {
+	if ( $post_id <= 0 ) {
+		return null;
+	}
+	$existing = get_post( $post_id );
+	if ( ! $existing ) {
+		return null;
+	}
+	if ( get_post_meta( $post_id, 'videopress_guid', true ) === $guid ) {
+		return null;
+	}
+	return $existing;
+}
+
+/**
  * Get details about a specific video by GUID:
  *
  * @param string $guid Video GUID.
- * @return object
+ * @return object|WP_Error
  */
 function videopress_get_video_details( $guid ) {
 	if ( ! videopress_is_valid_guid( $guid ) ) {
 		return new WP_Error( 'bad-guid-format', __( 'Invalid Video GUID!', 'jetpack-videopress-pkg' ) );
 	}
 
-	$version   = '1.1';
-	$endpoint  = sprintf( '/videos/%1$s', $guid );
-	$query_url = sprintf(
-		'https://public-api.wordpress.com/rest/v%1$s%2$s',
-		$version,
-		$endpoint
-	);
+	$cache_key = 'jetpack_videopress_' . $guid;
+	$data      = get_transient( $cache_key );
 
-	// Look for data in our transient. If nothing, let's make a new query.
-	$data_from_cache = get_transient( 'jetpack_videopress_' . $guid );
-	if ( false === $data_from_cache ) {
-		$response = wp_remote_get( esc_url_raw( $query_url ) );
-		$data     = json_decode( wp_remote_retrieve_body( $response ) );
+	// If not cached, fetch from API.
+	if ( false === $data ) {
+		// Try authenticated request first (required for private videos).
+		$result = Client::wpcom_json_api_request_as_blog( 'videos/' . $guid );
+
+		// Fallback to unauthenticated request for unconnected sites (public videos only).
+		if ( is_wp_error( $result ) && in_array( $result->get_error_code(), array( 'missing_token', 'unknown_token', 'site_not_registered' ), true ) ) {
+			$result = wp_remote_get( esc_url_raw( 'https://public-api.wordpress.com/rest/v1.1/videos/' . $guid ) );
+		}
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$response_code = wp_remote_retrieve_response_code( $result );
+		if ( 200 !== $response_code ) {
+			return new WP_Error(
+				'videopress-api-error',
+				sprintf(
+					/* translators: %d: HTTP status code returned by the WordPress.com VideoPress API. */
+					__( 'The WordPress.com VideoPress API returned an unexpected HTTP %d.', 'jetpack-videopress-pkg' ),
+					$response_code
+				),
+				array(
+					'status' => $response_code,
+					'body'   => wp_remote_retrieve_body( $result ),
+				)
+			);
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $result ) );
+
+		if ( null === $data ) {
+			return new WP_Error(
+				'videopress-invalid-json',
+				__( 'Received an invalid response from the VideoPress API.', 'jetpack-videopress-pkg' )
+			);
+		}
 
 		// Cache the response for an hour.
-		set_transient( 'jetpack_videopress_' . $guid, $data, HOUR_IN_SECONDS );
-	} else {
-		$data = $data_from_cache;
+		set_transient( $cache_key, $data, HOUR_IN_SECONDS );
 	}
 
 	/**
@@ -126,39 +195,98 @@ function videopress_download_poster_image( $url, $attachment_id ) {
 /**
  * Creates a local media library item of a remote VideoPress video.
  *
+ * Tries to reuse the original `post_id` from the WordPress.com videos table so the
+ * post↔video relationship recorded there stays in sync without a separate sync-back
+ * call. If that ID is already occupied locally by an unrelated post, behavior depends
+ * on `$force_on_collision`: by default the import is refused (`id_collision` WP_Error);
+ * when true, falls back to a fresh auto-incremented ID without touching the occupant.
+ *
  * @param string $guid Video GUID.
  * @param int    $parent_id Parent post ID.
+ * @param bool   $force_on_collision Fall back to a fresh ID instead of refusing if the original ID is occupied.
  *
- * @return int|object
+ * @return int|WP_Error
  */
-function create_local_media_library_for_videopress_guid( $guid, $parent_id = 0 ) {
+function create_local_media_library_for_videopress_guid( $guid, $parent_id = 0, $force_on_collision = false ) {
 	$vp_data = videopress_get_video_details( $guid );
 	if ( ! $vp_data || is_wp_error( $vp_data ) ) {
 		return $vp_data;
 	}
 
+	// Verify the video belongs to this site.
+	$current_blog_id = (int) \Jetpack_Options::get_option( 'id' );
+
+	if ( ! $current_blog_id ) {
+		return new \WP_Error(
+			'not_connected',
+			__( 'A connection to WordPress.com is required to import videos. Please connect your site from your WordPress dashboard.', 'jetpack-videopress-pkg' )
+		);
+	}
+
+	$video_blog_id = (int) ( $vp_data->blog_id ?? 0 );
+
+	if ( $current_blog_id !== $video_blog_id ) {
+		return new \WP_Error(
+			'wrong_blog',
+			__( 'This video belongs to a different site. You can only import videos uploaded to this site.', 'jetpack-videopress-pkg' )
+		);
+	}
+
 	$args = array(
-		'post_date'      => $vp_data->upload_date,
-		'post_title'     => wp_kses( $vp_data->title, array() ),
-		'post_content'   => wp_kses( $vp_data->description, array() ),
+		'post_date'      => $vp_data->upload_date ?? '',
+		'post_title'     => wp_kses( $vp_data->title ?? '', array() ),
+		'post_content'   => wp_kses( $vp_data->description ?? '', array() ),
 		'post_mime_type' => 'video/videopress',
-		'guid'           => sprintf( 'https://videopress.com/v/%s', $guid ),
+		'guid'           => videopress_build_url( $guid ),
 	);
+
+	$original_post_id = isset( $vp_data->post_id ) ? (int) $vp_data->post_id : 0;
+	$collision        = $original_post_id > 0 ? videopress_get_id_collision( $original_post_id, $guid ) : null;
+	if ( $collision && ! $force_on_collision ) {
+		// wp_insert_post() honors 'import_id' only when the ID is unused, otherwise it silently
+		// falls back to a fresh auto-increment — surface that case explicitly instead.
+		return new \WP_Error(
+			'id_collision',
+			sprintf(
+				/* translators: %1$d: existing post ID, %2$s: existing post type. */
+				__( 'Original attachment ID %1$d is already in use by post type "%2$s". Re-importing would change the ID and break the WordPress.com video table relationship.', 'jetpack-videopress-pkg' ),
+				$original_post_id,
+				$collision->post_type
+			),
+			array( 'post_id' => $original_post_id )
+		);
+	}
+	if ( $original_post_id > 0 && ! $collision ) {
+		$args['import_id'] = $original_post_id;
+	}
 
 	$attachment_id = wp_insert_attachment( $args, null, $parent_id );
 
 	if ( ! is_wp_error( $attachment_id ) ) {
 		update_post_meta( $attachment_id, 'videopress_guid', $guid );
-		wp_update_attachment_metadata(
-			$attachment_id,
-			array(
-				'width'  => $vp_data->width,
-				'height' => $vp_data->height,
-			)
+
+		// Store metadata in the same structure as XMLRPC::update_videopress_media_item().
+		$meta = array(
+			'width'      => $vp_data->width ?? 0,
+			'height'     => $vp_data->height ?? 0,
+			'videopress' => videopress_object_to_array( $vp_data ),
 		);
 
-		$thumbnail_id = videopress_download_poster_image( $vp_data->poster, $attachment_id );
-		update_post_meta( $attachment_id, '_thumbnail_id', $thumbnail_id );
+		if ( ! empty( $vp_data->original ) ) {
+			$meta['original'] = array( 'url' => $vp_data->original );
+		}
+
+		wp_update_attachment_metadata( $attachment_id, $meta );
+
+		// Mark as complete since we're importing a fully processed video.
+		update_post_meta( $attachment_id, 'videopress_status', 'complete' );
+
+		if ( ! empty( $vp_data->poster ) ) {
+			$thumbnail_id = videopress_download_poster_image( $vp_data->poster, $attachment_id );
+			if ( is_int( $thumbnail_id ) ) {
+				update_post_meta( $attachment_id, '_thumbnail_id', $thumbnail_id );
+			}
+		}
 	}
 
 	return $attachment_id;
@@ -647,6 +775,16 @@ function videopress_get_post_by_guid( $guid ) {
 }
 
 /**
+ * Build the cache key used by videopress_get_post_id_by_guid().
+ *
+ * @param string $guid Video GUID.
+ * @return string Transient key.
+ */
+function videopress_get_post_id_by_guid_cache_key( $guid ) {
+	return 'videopress_get_post_id_by_guid_' . $guid;
+}
+
+/**
  * Using a GUID, find the associated post ID.
  *
  * @since 8.4.0
@@ -654,7 +792,7 @@ function videopress_get_post_by_guid( $guid ) {
  * @return int|false The post ID for that guid, or false if none is found.
  */
 function videopress_get_post_id_by_guid( $guid ) {
-	$cache_key = 'videopress_get_post_id_by_guid_' . $guid;
+	$cache_key = videopress_get_post_id_by_guid_cache_key( $guid );
 	$cached_id = get_transient( $cache_key );
 
 	if ( is_int( $cached_id ) ) {

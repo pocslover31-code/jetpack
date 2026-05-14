@@ -1,0 +1,702 @@
+<?php // phpcs:ignore WordPress.Files.FileName
+/**
+ * Tests for the CLI class.
+ *
+ * @package automattic/jetpack-videopress
+ */
+
+namespace Automattic\Jetpack\VideoPress;
+
+use Automattic\Jetpack\Connection\Tokens;
+use Automattic\Jetpack\Constants;
+use Automattic\Jetpack\VideoPress\Tests\Mock_WP_CLI_Output_Capture;
+use Jetpack_Options;
+use PHPUnit\Framework\Attributes\BeforeClass;
+use PHPUnit\Framework\Attributes\Group;
+use WorDBless\BaseTestCase;
+use WorDBless\Posts;
+
+/**
+ * Tests for the CLI class.
+ *
+ * @group cli
+ */
+#[Group( 'cli' )]
+class CLI_Test extends BaseTestCase {
+
+	/**
+	 * Sets up the test environment before the class tests begin.
+	 *
+	 * @beforeClass
+	 */
+	#[BeforeClass]
+	public static function set_up_class() {
+		require_once __DIR__ . '/fixtures/class-mock-wp-cli-output-capture.php';
+		require_once __DIR__ . '/fixtures/wp-cli-mock.php';
+		require_once __DIR__ . '/../../src/utility-functions.php';
+
+		Posts::init();
+	}
+
+	/**
+	 * Set up before each test.
+	 */
+	public function set_up() {
+		parent::set_up();
+
+		// Simulate a connected site so Client::wpcom_json_api_request_as_blog() proceeds to HTTP request.
+		( new Tokens() )->update_blog_token( 'test.test' );
+		Jetpack_Options::update_option( 'id', 12345 );
+		Constants::set_constant( 'JETPACK__WPCOM_JSON_API_BASE', 'https://public-api.wordpress.com' );
+
+		// Reset captured WP_CLI output between tests.
+		Mock_WP_CLI_Output_Capture::reset();
+	}
+
+	/**
+	 * Returns mock video data for testing.
+	 *
+	 * @param array $overrides Optional overrides for the mock data.
+	 * @return object Mock video data object.
+	 */
+	public function get_mock_video_data( $overrides = array() ) {
+		$defaults = array(
+			'guid'            => 'abc12345',
+			'blog_id'         => 12345, // Must match Jetpack_Options 'id' set in set_up().
+			'post_id'         => 0,     // Tests opting in to ID preservation set this explicitly.
+			'title'           => 'Test Video Title',
+			'description'     => 'Test video description',
+			'upload_date'     => '2024-01-15 10:30:00',
+			'width'           => 1920,
+			'height'          => 1080,
+			'original'        => 'https://videos.files.wordpress.com/abc12345/test.mp4',
+			'rating'          => 'G',
+			'allow_download'  => true,
+			'display_embed'   => true,
+			'privacy_setting' => 0,
+			// Nested objects like the real API returns from json_decode().
+			'files'           => (object) array(
+				'dvd' => (object) array(
+					'original_img' => 'test-thumbnail.jpg',
+				),
+			),
+			'file_url_base'   => (object) array(
+				'https' => 'https://videos.files.wordpress.com/abc12345/',
+			),
+		);
+
+		return (object) array_merge( $defaults, $overrides );
+	}
+
+	/**
+	 * Squat on a post ID with an unrelated post so the import collides with it.
+	 *
+	 * @param int $post_id Post ID to occupy.
+	 */
+	protected function add_squatter_post( $post_id ) {
+		Posts::init()->posts[ $post_id ] = (object) array(
+			'ID'             => $post_id,
+			'post_type'      => 'page',
+			'post_status'    => 'publish',
+			'post_title'     => 'Squatter',
+			'post_mime_type' => '',
+		);
+		wp_cache_add( $post_id, Posts::init()->posts[ $post_id ], 'posts' );
+	}
+
+	/**
+	 * Mock video data for the current test.
+	 *
+	 * @var object|null
+	 */
+	protected $mock_video_data = null;
+
+	/**
+	 * Filter callback to mock the VideoPress API response.
+	 *
+	 * @param false|array|\WP_Error $preempt A preemptive return value.
+	 * @param array                 $args    Request arguments.
+	 * @param string                $url     The request URL.
+	 * @return array|false Mock response or false to proceed with the request.
+	 */
+	public function filter_mock_videopress_api( $preempt, $args, $url ) {
+		// Only intercept VideoPress API calls.
+		if ( strpos( $url, 'videos/' ) === false ) {
+			return $preempt;
+		}
+
+		if ( null === $this->mock_video_data ) {
+			return $preempt;
+		}
+
+		return array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode( $this->mock_video_data, JSON_HEX_TAG | JSON_HEX_AMP ),
+		);
+	}
+
+	/**
+	 * Clear the VideoPress transient cache for a GUID.
+	 *
+	 * @param string $guid The video GUID.
+	 */
+	public function clear_video_cache( $guid ) {
+		delete_transient( 'jetpack_videopress_' . $guid );
+		delete_transient( videopress_get_post_id_by_guid_cache_key( $guid ) );
+	}
+
+	/**
+	 * Test import command with missing GUID argument.
+	 */
+	public function test_import_without_guid_shows_error() {
+		$cli = new CLI();
+
+		$exception_thrown = false;
+		try {
+			$cli->import( array(), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+
+		$this->assertTrue( $exception_thrown, 'Expected WP_CLI::error to throw an exception' );
+	}
+
+	/**
+	 * Test import command with empty GUID argument.
+	 */
+	public function test_import_with_empty_guid_shows_error() {
+		$cli = new CLI();
+
+		$exception_thrown = false;
+		try {
+			$cli->import( array( '' ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+
+		$this->assertTrue( $exception_thrown, 'Expected WP_CLI::error to throw an exception' );
+	}
+
+	/**
+	 * Test import command with invalid GUID shows error.
+	 */
+	public function test_import_with_invalid_guid_shows_error() {
+		$cli = new CLI();
+
+		$exception_thrown = false;
+		try {
+			$cli->import( array( 'invalid!guid' ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+
+		$this->assertTrue( $exception_thrown, 'Expected WP_CLI::error to throw an exception' );
+	}
+
+	/**
+	 * Test import command creates attachment successfully.
+	 */
+	public function test_import_creates_attachment() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+		$this->mock_video_data = $this->get_mock_video_data();
+
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		$cli = new CLI();
+
+		$exception_message = null;
+		try {
+			$cli->import( array( $guid ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_message = $e->getMessage();
+		}
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+
+		$this->assertNull( $exception_message, 'Import should succeed but got error: ' . $exception_message );
+	}
+
+	/**
+	 * Test batch_import processes a list of GUIDs and reports a summary.
+	 */
+	public function test_batch_import_from_file() {
+		$guid_a = 'aaaaaaaa';
+		$guid_b = 'bbbbbbbb';
+		$this->clear_video_cache( $guid_a );
+		$this->clear_video_cache( $guid_b );
+
+		$file = tempnam( sys_get_temp_dir(), 'guids' );
+		file_put_contents( $file, "$guid_a\n# comment\n\n$guid_b\n" );
+
+		$this->mock_video_data = $this->get_mock_video_data();
+		$mock                  = function ( $preempt, $args, $url ) {
+			if ( strpos( $url, 'videos/' ) === false ) {
+				return $preempt;
+			}
+			$guid = preg_match( '#videos/([a-z0-9]+)#i', $url, $m ) ? $m[1] : 'aaaaaaaa';
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode( $this->get_mock_video_data( array( 'guid' => $guid ) ), JSON_HEX_TAG | JSON_HEX_AMP ),
+			);
+		};
+
+		add_filter( 'pre_http_request', $mock, 10, 3 );
+		( new CLI() )->batch_import( array( $file ), array() );
+		remove_filter( 'pre_http_request', $mock, 10 );
+		unlink( $file );
+
+		$log = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['log'] );
+		$this->assertStringContainsString( '2 total', $log );
+		$this->assertStringContainsString( '2 imported', $log );
+		$this->assertStringContainsString( '0 failed', $log );
+		// Pin the per-GUID success line format so the imported message contract doesn't drift silently.
+		$this->assertStringContainsString( 'Imported as Attachment ID', $log );
+	}
+
+	/**
+	 * Test batch_import dedups repeated GUIDs in the input file.
+	 *
+	 * Without dedup, the second occurrence of a GUID would trip the "already imported"
+	 * skip path on its own second pass, inflating the skipped count.
+	 */
+	public function test_batch_import_dedups_input_lines() {
+		$guid = 'aaaaaaaa';
+		$this->clear_video_cache( $guid );
+
+		$file = tempnam( sys_get_temp_dir(), 'guids' );
+		file_put_contents( $file, "$guid\n$guid\n$guid\n" );
+
+		$this->mock_video_data = $this->get_mock_video_data();
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->batch_import( array( $file ), array() );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		unlink( $file );
+
+		$log = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['log'] );
+		$this->assertStringContainsString( '1 total', $log );
+		$this->assertStringContainsString( '1 imported', $log );
+	}
+
+	/**
+	 * Test batch_import surfaces invalid GUIDs as failures and exits non-zero.
+	 */
+	public function test_batch_import_marks_invalid_guids_as_failed() {
+		$file = tempnam( sys_get_temp_dir(), 'guids' );
+		file_put_contents( $file, "not a guid\n" );
+
+		$exception_thrown = false;
+		try {
+			( new CLI() )->batch_import( array( $file ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+		unlink( $file );
+
+		$this->assertTrue( $exception_thrown, 'Batch with failures should exit via WP_CLI::error.' );
+		$log = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['log'] );
+		$this->assertStringContainsString( '1 failed', $log );
+		// Invalid GUIDs are bucketed as failures; the per-line output must say so, not "skipped",
+		// and must echo the offending GUID for paste/typo diagnosis.
+		$this->assertStringContainsString( 'FAIL: Invalid GUID: not a guid', $log );
+	}
+
+	/**
+	 * Test batch_import --dry-run does not mutate state and reports the would-preserve ID.
+	 */
+	public function test_batch_import_dry_run_skips_writes() {
+		$guid = 'aaaaaaaa';
+		$this->clear_video_cache( $guid );
+
+		$file = tempnam( sys_get_temp_dir(), 'guids' );
+		file_put_contents( $file, "$guid\n" );
+
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => 90220 ) );
+
+		$captured_data = null;
+		$capture       = function ( $data ) use ( &$captured_data ) {
+			$captured_data = $data;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->batch_import( array( $file ), array( 'dry-run' => true ) );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+		unlink( $file );
+
+		$this->assertNull( $captured_data, 'Dry run should not invoke wp_insert_attachment.' );
+
+		$log = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['log'] );
+		$this->assertStringContainsString( '[dry-run] Would import as attachment 90220', $log );
+		$this->assertStringContainsString( 'preserved from WordPress.com', $log );
+	}
+
+	/**
+	 * Test batch_import --dry-run --force on an ID collision reports a fresh-ID fallback.
+	 */
+	public function test_batch_import_dry_run_force_collision_falls_back() {
+		$guid             = 'aaaaaaaa';
+		$original_post_id = 90221;
+		$this->clear_video_cache( $guid );
+		$this->add_squatter_post( $original_post_id );
+
+		$file = tempnam( sys_get_temp_dir(), 'guids' );
+		file_put_contents( $file, "$guid\n" );
+
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => $original_post_id ) );
+
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->batch_import(
+			array( $file ),
+			array(
+				'dry-run' => true,
+				'force'   => true,
+			)
+		);
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		unlink( $file );
+
+		$log = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['log'] );
+		$this->assertStringContainsString( 'fresh auto-incremented ID', $log );
+		$this->assertStringContainsString( (string) $original_post_id, $log );
+	}
+
+	/**
+	 * Test --dry-run reports the would-preserve ID without mutating state.
+	 */
+	public function test_import_dry_run_reports_preserved_id() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => 90217 ) );
+
+		$captured_data = null;
+		$capture       = function ( $data ) use ( &$captured_data ) {
+			$captured_data = $data;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->import( array( $guid ), array( 'dry-run' => true ) );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+
+		$this->assertNull( $captured_data, 'Dry run should not invoke wp_insert_attachment.' );
+
+		// Single-mode import() emits the would-import line via WP_CLI::success.
+		$success = implode( "\n", Mock_WP_CLI_Output_Capture::$captured['success'] );
+		$this->assertStringContainsString( '90217', $success );
+		$this->assertStringContainsString( '[dry-run]', $success );
+	}
+
+	/**
+	 * Test --dry-run with default flags surfaces a collision via WP_CLI::error.
+	 */
+	public function test_import_dry_run_reports_collision_as_error() {
+		$guid             = 'abc12345';
+		$original_post_id = 90218;
+		$this->clear_video_cache( $guid );
+		$this->add_squatter_post( $original_post_id );
+
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => $original_post_id ) );
+
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		$exception_thrown = false;
+		try {
+			( new CLI() )->import( array( $guid ), array( 'dry-run' => true ) );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+			$this->assertStringContainsString( (string) $original_post_id, $e->getMessage() );
+			$this->assertStringContainsString( '--force', $e->getMessage() );
+		}
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+
+		$this->assertTrue( $exception_thrown, 'Dry-run should surface the collision via WP_CLI::error.' );
+	}
+
+	/**
+	 * Test that without --force, an ID collision aborts the real run without touching the squatter.
+	 */
+	public function test_import_refuses_id_collision_without_force() {
+		$guid             = 'abc12345';
+		$original_post_id = 90230;
+		$this->clear_video_cache( $guid );
+		$this->add_squatter_post( $original_post_id );
+
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => $original_post_id ) );
+
+		$captured_data = null;
+		$capture       = function ( $data ) use ( &$captured_data ) {
+			$captured_data = $data;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		$exception_thrown = false;
+		try {
+			( new CLI() )->import( array( $guid ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+			$this->assertStringContainsString( '--force', $e->getMessage() );
+			$this->assertStringContainsString( (string) $original_post_id, $e->getMessage() );
+		}
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+
+		$this->assertTrue( $exception_thrown );
+		$this->assertNull( $captured_data, 'Refusing on collision must not call wp_insert_attachment.' );
+		$this->assertNotNull( get_post( $original_post_id ), 'Squatter must remain untouched.' );
+	}
+
+	/**
+	 * Test --force on an ID collision falls back to a fresh ID instead of failing.
+	 */
+	public function test_import_force_falls_back_on_id_collision() {
+		$guid             = 'abc12345';
+		$original_post_id = 90219;
+		$this->clear_video_cache( $guid );
+		$this->add_squatter_post( $original_post_id );
+
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => $original_post_id ) );
+
+		$captured_postarr = null;
+		$capture          = function ( $data, $postarr ) use ( &$captured_postarr ) {
+			$captured_postarr = $postarr;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5, 2 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->import( array( $guid ), array( 'force' => true ) );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+
+		// --force on a collision should drop import_id (fall back to fresh) without touching the squatter.
+		$this->assertIsArray( $captured_postarr );
+		$this->assertEmpty( $captured_postarr['import_id'] ?? null, '--force should NOT preserve the colliding ID.' );
+		// The squatter must remain.
+		$this->assertNotNull( get_post( $original_post_id ) );
+	}
+
+	/**
+	 * Test import command propagates --parent-id to the helper.
+	 */
+	public function test_import_parent_id_flag() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+		$this->mock_video_data = $this->get_mock_video_data();
+
+		$captured_data = null;
+		$capture       = function ( $data ) use ( &$captured_data ) {
+			$captured_data = $data;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->import( array( $guid ), array( 'parent-id' => 4242 ) );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+
+		$this->assertSame( 4242, (int) ( $captured_data['post_parent'] ?? 0 ) );
+	}
+
+	/**
+	 * Test import command preserves the original ID by default.
+	 */
+	public function test_import_preserves_id_by_default() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+		$this->mock_video_data = $this->get_mock_video_data( array( 'post_id' => 90216 ) );
+
+		$captured_postarr = null;
+		$capture          = function ( $data, $postarr ) use ( &$captured_postarr ) {
+			$captured_postarr = $postarr;
+			return $data;
+		};
+
+		add_filter( 'wp_insert_attachment_data', $capture, 5, 2 );
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+		( new CLI() )->import( array( $guid ), array() );
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+		remove_filter( 'wp_insert_attachment_data', $capture, 5 );
+
+		$this->assertSame( 90216, $captured_postarr['import_id'] ?? null );
+	}
+
+	/**
+	 * Test import command returns early when video already exists without --force.
+	 *
+	 * Uses transient to simulate existing post lookup, bypassing WP_Query
+	 * which doesn't work in WorDBless dbless mode.
+	 */
+	public function test_import_returns_early_when_video_exists() {
+		$guid             = 'abc12345';
+		$existing_post_id = 999;
+
+		// Simulate an existing attachment by setting the transient.
+		// videopress_get_post_id_by_guid() checks this transient first.
+		set_transient( videopress_get_post_id_by_guid_cache_key( $guid ), $existing_post_id, HOUR_IN_SECONDS );
+
+		$cli = new CLI();
+
+		// Should return early without error (just a warning).
+		$exception_thrown = false;
+		try {
+			$cli->import( array( $guid ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+
+		$this->assertFalse( $exception_thrown, 'Import should return early with warning, not throw error' );
+
+		// Confirm the warning was actually emitted, naming the existing attachment ID.
+		$this->assertCount( 1, Mock_WP_CLI_Output_Capture::$captured['warning'] );
+		$this->assertStringContainsString( (string) $existing_post_id, Mock_WP_CLI_Output_Capture::$captured['warning'][0] );
+		$this->assertStringContainsString( '--force', Mock_WP_CLI_Output_Capture::$captured['warning'][0] );
+		$this->assertSame( array(), Mock_WP_CLI_Output_Capture::$captured['success'] );
+
+		// Cleanup.
+		delete_transient( videopress_get_post_id_by_guid_cache_key( $guid ) );
+	}
+
+	/**
+	 * Test import command with --force deletes existing attachment and recreates.
+	 */
+	public function test_import_with_force_deletes_existing() {
+		$guid = 'abc12345';
+
+		// Create a real attachment to delete.
+		$existing_post_id = wp_insert_post(
+			array(
+				'post_type'      => 'attachment',
+				'post_mime_type' => 'video/videopress',
+				'post_title'     => 'Existing Video',
+				'post_status'    => 'inherit',
+			)
+		);
+		update_post_meta( $existing_post_id, 'videopress_guid', $guid );
+
+		// Set transient so videopress_get_post_id_by_guid() finds it.
+		set_transient( videopress_get_post_id_by_guid_cache_key( $guid ), $existing_post_id, HOUR_IN_SECONDS );
+
+		$this->mock_video_data = $this->get_mock_video_data();
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+
+		$cli = new CLI();
+
+		$exception_message = null;
+		try {
+			$cli->import( array( $guid ), array( 'force' => true ) );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_message = $e->getMessage();
+		}
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ) );
+
+		// Should succeed (old post deleted, new one created).
+		$this->assertNull( $exception_message, 'Import with --force should succeed but got error: ' . $exception_message );
+
+		// Verify the old attachment was deleted.
+		$this->assertNull( get_post( $existing_post_id ), 'Old attachment should have been deleted' );
+	}
+
+	/**
+	 * Test import command with --force fails when deletion fails.
+	 *
+	 * This covers the error path when wp_delete_attachment() returns false.
+	 */
+	public function test_import_with_force_fails_when_delete_fails() {
+		$guid = 'abc12345';
+
+		// Set transient pointing to a non-existent post ID.
+		// wp_delete_attachment() will return null/false for non-existent posts.
+		$fake_post_id = 999999;
+		set_transient( videopress_get_post_id_by_guid_cache_key( $guid ), $fake_post_id, HOUR_IN_SECONDS );
+
+		// process_import() fetches video metadata before attempting the force-delete now,
+		// so we need to mock the API for it to reach the delete-attempt branch.
+		$this->mock_video_data = $this->get_mock_video_data();
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+
+		$cli = new CLI();
+
+		$exception_thrown = false;
+		try {
+			$cli->import( array( $guid ), array( 'force' => true ) );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+			$this->assertStringContainsString( (string) $fake_post_id, $e->getMessage() );
+		}
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+
+		$this->assertTrue( $exception_thrown, 'Expected error when deletion fails' );
+
+		// Cleanup.
+		delete_transient( videopress_get_post_id_by_guid_cache_key( $guid ) );
+	}
+
+	/**
+	 * Test import command shows error when API returns error.
+	 */
+	public function test_import_with_api_error_shows_error() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+
+		// Mock API to return an error response.
+		$mock_api_error = static function ( $preempt, $args, $url ) {
+			if ( strpos( $url, 'videos/' ) === false ) {
+				return $preempt;
+			}
+
+			return array(
+				'response' => array( 'code' => 404 ),
+				'body'     => wp_json_encode( array( 'error' => 'Video not found' ), JSON_HEX_TAG | JSON_HEX_AMP ),
+			);
+		};
+
+		add_filter( 'pre_http_request', $mock_api_error, 10, 3 );
+
+		$cli = new CLI();
+
+		$exception_thrown = false;
+		try {
+			$cli->import( array( $guid ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown = true;
+		}
+
+		remove_filter( 'pre_http_request', $mock_api_error, 10 );
+
+		$this->assertTrue( $exception_thrown, 'Expected error when API returns error' );
+	}
+
+	/**
+	 * Test import command shows error when video belongs to different site.
+	 */
+	public function test_import_with_different_blog_id_shows_error() {
+		$guid = 'abc12345';
+		$this->clear_video_cache( $guid );
+
+		// Mock video from a different blog_id.
+		$this->mock_video_data = $this->get_mock_video_data( array( 'blog_id' => 99999 ) );
+
+		add_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10, 3 );
+
+		$cli = new CLI();
+
+		$exception_thrown  = false;
+		$exception_message = '';
+		try {
+			$cli->import( array( $guid ), array() );
+		} catch ( \WP_CLI\ExitException $e ) {
+			$exception_thrown  = true;
+			$exception_message = $e->getMessage();
+		}
+
+		remove_filter( 'pre_http_request', array( $this, 'filter_mock_videopress_api' ), 10 );
+
+		$this->assertTrue( $exception_thrown, 'Expected error when video belongs to different site' );
+		$this->assertStringContainsString( 'different site', $exception_message );
+	}
+}
