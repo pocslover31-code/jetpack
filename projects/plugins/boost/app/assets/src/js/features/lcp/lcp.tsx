@@ -10,7 +10,11 @@ import { ErrorDetails } from './status/error-details';
 import Status from './status/status';
 import styles from './status/status.module.scss';
 
-const Lcp = () => {
+type LcpProps = {
+	inline?: boolean;
+};
+
+const Lcp = ( { inline = false }: LcpProps = {} ) => {
 	const [ query ] = useLcpState();
 	const lcpState = query?.data;
 
@@ -39,16 +43,13 @@ const Lcp = () => {
 	return (
 		<Module
 			slug="lcp"
-			title={ __( 'Optimize LCP Images', 'jetpack-boost' ) }
+			title={ __( 'Optimize LCP Images for smoother experience', 'jetpack-boost' ) }
 			worksOffline={ false }
-			description={
-				<p>
-					{ __(
-						'Improve the Largest Contentful Paint (LCP) of your Cornerstone Pages, optimizing their key image, so users can enjoy a smoother experience.',
-						'jetpack-boost'
-					) }
-				</p>
-			}
+			inline={ inline }
+			description={ __(
+				'Improve the Largest Contentful Paint (LCP) of your Cornerstone Pages, optimizing their key image, so users can enjoy a smoother experience.',
+				'jetpack-boost'
+			) }
 			onEnable={ handleEnable }
 			onBeforeToggle={ handleBeforeToggle }
 		>

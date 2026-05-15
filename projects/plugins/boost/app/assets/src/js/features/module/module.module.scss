@@ -1,42 +1,13 @@
-.module {
-	margin-bottom: 2em;
-	display: flex;
-	margin-left: auto;
-	margin-right: auto;
-
-
-	h2 {
-		font-size: 22px;
-		margin-top: 0;
-	}
-
-	p {
-		margin: 1em 0;
-	}
-
-	.content h3:focus-visible {
-		outline: none;
-	}
+// Indent any children rendered below the toggle (status text, notices,
+// sub-feature CollapsibleCards) so they line up with the toggle's label /
+// help text (40px ≈ toggle width + ToggleControl's internal gap).
+.inline-extras {
+	margin-top: var(--wpds-dimension-gap-md, 16px);
+	padding-left: 40px;
 }
 
-.toggle {
-	// Compensate for header line height
-	// Manually move the switch to align it better
-	transform: translateY(8px);
-	margin-right: 2em;
-	min-width: 36px;
-}
-
-.content {
-	width: 100%;
-}
-
-.failed-module-notice {
-	width: 100%;
-	margin-bottom: 2em;
-	margin-top: 1em;
-}
-
-.offlineMessage {
-	line-height: 1.5;
+.no-toggle-title {
+	font-size: var(--wpds-typography-font-size-md, 13px);
+	font-weight: 600;
+	margin: 0 0 var(--wpds-dimension-gap-xs, 4px);
 }

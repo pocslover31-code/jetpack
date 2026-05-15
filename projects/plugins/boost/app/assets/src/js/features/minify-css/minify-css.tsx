@@ -5,22 +5,23 @@ import Module from '$features/module/module';
 import { useShowMinifyLegacy } from '$lib/stores/minify';
 import { __ } from '@wordpress/i18n';
 
-const MinifyCss = () => {
+type MinifyCssProps = {
+	inline?: boolean;
+};
+
+const MinifyCss = ( { inline = false }: MinifyCssProps = {} ) => {
 	const showMinifyLegacy = useShowMinifyLegacy();
 	const [ jsModule ] = useSingleModuleState( 'minify_js' );
 
 	return (
 		<Module
 			slug="minify_css"
+			inline={ inline }
 			title={ __( 'Concatenate CSS', 'jetpack-boost' ) }
-			description={
-				<p>
-					{ __(
-						'Styles are grouped by their original placement, concatenated and minified to reduce site loading time and reduce the number of requests.',
-						'jetpack-boost'
-					) }
-				</p>
-			}
+			description={ __(
+				'Styles are grouped by their original placement, concatenated and minified to reduce site loading time and reduce the number of requests.',
+				'jetpack-boost'
+			) }
 			onEnable={ showMinifyLegacy.refetch }
 		>
 			<MinifyMeta

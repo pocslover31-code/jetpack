@@ -9,16 +9,14 @@ import MinifyJs from '$features/minify-js/minify-js';
 import { useSingleModuleState } from '$features/module/lib/stores';
 import Module from '$features/module/module';
 import PageCacheModule from '$features/page-cache/page-cache';
-import PremiumTooltip from '$features/premium-tooltip/premium-tooltip';
 import Upgraded from '$features/ui/upgraded/upgraded';
-import InterstitialModalCTA from '$features/upgrade-cta/interstitial-modal-cta';
+import UpgradeNotice from '$features/upgrade-cta/upgrade-notice';
 import { recordBoostEvent } from '$lib/utils/analytics';
 import { getRedirectUrl } from '@automattic/jetpack-components';
 import { createInterpolateElement } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
-import { Link } from '@wordpress/ui';
+import { Card, Link, Stack } from '@wordpress/ui';
 import styles from './index.module.scss';
-import LcpModule from '$features/lcp/lcp';
 
 const Index = () => {
 	const criticalCssLink = getRedirectUrl( 'jetpack-boost-critical-css' );
@@ -40,70 +38,26 @@ const Index = () => {
 	};
 
 	return (
-		<div className="jb-container--narrow">
+		<Stack className={ styles.container } direction="column" gap="xl">
+			{ /* Cornerstone pages — keeps its own Card.Root which already serves
+			     as the section card (title, description, badge, editor, etc.). */ }
 			<CornerstonePages />
-			<Module
-				slug="critical_css"
-				title={ __( 'Optimize Critical CSS Loading (manual)', 'jetpack-boost' ) }
-				onEnable={ requestRegenerateCriticalCss }
-				description={
-					<>
-						<p>
-							{ createInterpolateElement(
-								__(
-									`Move important styling information to the start of the page, which helps pages display your content sooner, so your users don’t have to wait for the entire page to load. Commonly referred to as <link>Critical CSS</link>.`,
-									'jetpack-boost'
-								),
-								{
-									link: (
-										<Link openInNewTab href={ criticalCssLink } onClick={ handleCriticalCssLink } />
-									),
-								}
-							) }
-						</p>
-						<div className={ styles[ 'tooltip-wrapper' ] }>
-							<p>
-								{ createInterpolateElement(
-									__(
-										`<b>You should regenerate your Critical CSS</b> whenever you make changes to the HTML or CSS structure of your site.`,
-										'jetpack-boost'
-									),
-									{
-										b: <b />,
-									}
-								) }
-							</p>
-							<PremiumTooltip />
-						</div>
-					</>
-				}
-			>
-				<CriticalCssMeta />
 
-				<InterstitialModalCTA
-					identifier="critical-css"
-					description={ __(
-						'Save time by upgrading to Automatic Critical CSS generation.',
-						'jetpack-boost'
-					) }
-				/>
-			</Module>
-			<Module
-				slug="cloud_css"
-				title={
-					<>
-						{ __( 'Automatically Optimize CSS Loading', 'jetpack-boost' ) }
-						<Upgraded />
-					</>
-				}
-				worksOffline={ false }
-				onEnable={ requestRegenerateCriticalCss }
-				description={
-					<>
-						<p>
-							{ createInterpolateElement(
+			{ /* Code loading optimization section */ }
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>{ __( 'Code loading optimization', 'jetpack-boost' ) }</Card.Title>
+				</Card.Header>
+				<Card.Content>
+					<Stack direction="column" gap="lg">
+						<Module
+							inline
+							slug="critical_css"
+							title={ __( 'Optimize Critical CSS Loading (manual)', 'jetpack-boost' ) }
+							onEnable={ requestRegenerateCriticalCss }
+							description={ createInterpolateElement(
 								__(
-									`Move important styling information to the start of the page, which helps pages display your content sooner, so your users don’t have to wait for the entire page to load. Commonly referred to as <link>Critical CSS</link>.`,
+									`Move important styling information to the start of the page, which helps pages display your content sooner, so your users don’t have to wait for the entire page to load. Commonly referred to as <link>Critical CSS</link>. Regenerate your Critical CSS whenever you make changes to the HTML or CSS structure of your site.`,
 									'jetpack-boost'
 								),
 								{
@@ -112,84 +66,114 @@ const Index = () => {
 									),
 								}
 							) }
-						</p>
-						<p>
-							{ createInterpolateElement(
+						>
+							<CriticalCssMeta />
+							<UpgradeNotice
+								identifier="critical-css"
+								description={ __(
+									'Save time by upgrading to Automatic Critical CSS generation.',
+									'jetpack-boost'
+								) }
+							/>
+						</Module>
+						<Module
+							inline
+							slug="cloud_css"
+							title={
+								<>
+									{ __( 'Automatically Optimize CSS Loading', 'jetpack-boost' ) }
+									<Upgraded />
+								</>
+							}
+							worksOffline={ false }
+							onEnable={ requestRegenerateCriticalCss }
+							description={ createInterpolateElement(
 								__(
-									`<b>Boost will automatically generate your Critical CSS</b> whenever you make changes to the HTML or CSS structure of your site.`,
+									`Move important styling information to the start of the page, which helps pages display your content sooner, so your users don’t have to wait for the entire page to load. Commonly referred to as <link>Critical CSS</link>. Boost will automatically generate your Critical CSS whenever you make changes to the HTML or CSS structure of your site.`,
 									'jetpack-boost'
 								),
 								{
-									b: <strong />,
+									link: (
+										<Link openInNewTab href={ criticalCssLink } onClick={ handleCriticalCssLink } />
+									),
 								}
 							) }
-						</p>
-					</>
-				}
-			>
-				<CloudCssMeta />
-			</Module>
-			<LcpModule />
-			<PageCacheModule />
-			<Module
-				slug="render_blocking_js"
-				title={ __( 'Defer Non-Essential JavaScript', 'jetpack-boost' ) }
-				description={
-					<p>
-						{ createInterpolateElement(
-							__(
-								`Run non-essential JavaScript after the page has loaded so that styles and images can load more quickly. Read more on <link>web.dev</link>.`,
-								'jetpack-boost'
-							),
-							{
-								link: (
-									<Link
-										openInNewTab
-										onClick={ () => recordBoostEvent( 'defer_js_link_clicked', {} ) }
-										href={ deferJsLink }
-									/>
+						>
+							<CloudCssMeta />
+						</Module>
+						<PageCacheModule inline />
+						<Module
+							inline
+							slug="render_blocking_js"
+							title={ __( 'Defer Non-Essential JavaScript', 'jetpack-boost' ) }
+							description={ createInterpolateElement(
+								__(
+									`Run non-essential JavaScript after the page has loaded so that styles and images can load more quickly. Read more on <link>web.dev</link>.`,
+									'jetpack-boost'
 								),
-							}
-						) }
-					</p>
-				}
-			></Module>
-			<MinifyJs />
-			<MinifyCss />
-			<Module
-				slug="image_cdn"
-				title={
-					<>
-						{ __( 'Image CDN', 'jetpack-boost' ) }
-						{ hasPremiumCdnFeatures && <Upgraded /> }
-					</>
-				}
-				worksOffline={ false }
-				description={
-					<p>
-						{ __(
+								{
+									link: (
+										<Link
+											openInNewTab
+											onClick={ () => recordBoostEvent( 'defer_js_link_clicked', {} ) }
+											href={ deferJsLink }
+										/>
+									),
+								}
+							) }
+						></Module>
+						<MinifyJs inline />
+						<MinifyCss inline />
+					</Stack>
+				</Card.Content>
+			</Card.Root>
+
+			{ /* Image CDN configuration section */ }
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>{ __( 'Image CDN configuration', 'jetpack-boost' ) }</Card.Title>
+				</Card.Header>
+				<Card.Content>
+					<Module
+						inline
+						slug="image_cdn"
+						title={
+							<>
+								{ __( 'Image CDN', 'jetpack-boost' ) }
+								{ hasPremiumCdnFeatures && <Upgraded /> }
+							</>
+						}
+						worksOffline={ false }
+						description={ __(
 							`Deliver images from Jetpack's Content Delivery Network. Automatically resizes your images to an appropriate size, converts them to modern efficient formats like WebP, and serves them from a worldwide network of servers.`,
 							'jetpack-boost'
 						) }
-					</p>
-				}
-			>
-				{ ! hasPremiumCdnFeatures && (
-					<InterstitialModalCTA
-						identifier="image-cdn"
-						description={ __(
-							'Auto-resize lazy images and adjust their quality.',
-							'jetpack-boost'
+					>
+						{ ! hasPremiumCdnFeatures && (
+							<UpgradeNotice
+								identifier="image-cdn"
+								description={ __(
+									'Auto-resize lazy images and adjust their quality.',
+									'jetpack-boost'
+								) }
+							/>
 						) }
-					/>
-				) }
-				<ImageCdnLiar isPremium={ imageCdnLiarState?.available ?? false } />
-				<QualitySettings isPremium={ imageCdnQualityState?.available ?? false } />
-			</Module>
-			<div className={ styles.settings }>
-				<ImageGuide />
-			</div>
-		</div>
+						<QualitySettings isPremium={ imageCdnQualityState?.available ?? false } />
+						<ImageCdnLiar isPremium={ imageCdnLiarState?.available ?? false } />
+					</Module>
+				</Card.Content>
+			</Card.Root>
+
+			{ /* Image guide section */ }
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>{ __( 'Image guide', 'jetpack-boost' ) }</Card.Title>
+				</Card.Header>
+				<Card.Content>
+					<ImageGuide inline />
+				</Card.Content>
+			</Card.Root>
+		</Stack>
 	);
 };
 
