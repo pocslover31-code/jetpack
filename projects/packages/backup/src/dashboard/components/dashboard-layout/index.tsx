@@ -1,6 +1,7 @@
 import { Page } from '@wordpress/admin-ui';
 import { __ } from '@wordpress/i18n';
-import DevModeBanner from '../dev-mode-banner';
+import QueryClientProvider from '../../providers/query-client-provider';
+import Gates from '../gates';
 import './style.scss';
 import type { ReactNode } from 'react';
 
@@ -13,8 +14,8 @@ type Props = {
  * Shared shell for every screen of the modernized Backup dashboard.
  *
  * Wraps a `<Page>` from `@wordpress/admin-ui` (which provides the standard
- * wp-admin chrome) with the dev-mode banner and a centered, max-width body
- * container that every screen renders into.
+ * wp-admin chrome) with the dashboard's QueryClient + Gates and a centered,
+ * max-width body container that every screen renders into.
  *
  * @param props          - Component props.
  * @param props.children - Screen contents to render inside the page body.
@@ -32,8 +33,11 @@ export default function DashboardLayout( { children, actions }: Props ) {
 			hasPadding={ false }
 			actions={ actions }
 		>
-			<DevModeBanner />
-			<div className="jpb-dashboard-body">{ children }</div>
+			<QueryClientProvider>
+				<div className="jpb-dashboard-body">
+					<Gates>{ children }</Gates>
+				</div>
+			</QueryClientProvider>
 		</Page>
 	);
 }

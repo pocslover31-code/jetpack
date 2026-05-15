@@ -7,24 +7,25 @@ import { Link, useParams } from '@wordpress/route';
 import { Button, Card, Stack, Text } from '@wordpress/ui';
 import DashboardLayout from '../components/dashboard-layout';
 import RestoreItemsChecklist from '../components/restore-items-checklist';
-import { findActivityById } from '../fixtures/activity-log';
-import { useMockRestore } from '../hooks/use-mock-restore';
+import { toIntRewindId } from '../data/api/_helpers';
+import { useRestore } from '../hooks/use-restore';
 import { DEFAULT_RESTORE_ITEMS } from '../types/restore';
 
 /**
  * Restore screen — narrow centered layout with the warning notice, the
- * shared item checklist, and a Confirm button. Submit transitions
- * through a synthetic state machine; ~10% of submits land in the error
- * branch.
+ * shared item checklist, and a Confirm button. Submit kicks off a
+ * WPCOM rewind and polls until it lands on success, failure, or error.
  *
  * @return The rendered Restore screen.
  */
 export default function RestoreScreen() {
 	const { rewindId } = useParams( { from: '/restore/$rewindId' } );
-	const item = findActivityById( rewindId );
-	const restorePoint = item ? item.publishedAt : null;
+	const restorePoint = ( () => {
+		const seconds = parseInt( toIntRewindId( rewindId ), 10 );
+		return Number.isFinite( seconds ) ? new Date( seconds * 1000 ).toISOString() : null;
+	} )();
 	const [ items, setItems ] = useState( DEFAULT_RESTORE_ITEMS );
-	const { state, submit, reset } = useMockRestore();
+	const { state, submit, reset } = useRestore( rewindId );
 
 	return (
 		<DashboardLayout>

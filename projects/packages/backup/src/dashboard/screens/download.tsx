@@ -7,23 +7,25 @@ import { Link, useParams } from '@wordpress/route';
 import { Button, Card, Stack, Text } from '@wordpress/ui';
 import DashboardLayout from '../components/dashboard-layout';
 import RestoreItemsChecklist from '../components/restore-items-checklist';
-import { findActivityById } from '../fixtures/activity-log';
-import { useMockDownload } from '../hooks/use-mock-download';
+import { toIntRewindId } from '../data/api/_helpers';
+import { useDownload } from '../hooks/use-download';
 import { DEFAULT_RESTORE_ITEMS } from '../types/restore';
 
 /**
  * Download screen — same narrow layout as the Restore screen minus the
- * warning notice. Submission runs through a mocked state machine; the
- * success branch surfaces a synthetic download URL as a link.
+ * warning notice. Submission initiates a WPCOM-side download prep; the
+ * success branch surfaces the signed download URL as a link.
  *
  * @return The rendered Download screen.
  */
 export default function DownloadScreen() {
 	const { rewindId } = useParams( { from: '/download/$rewindId' } );
-	const item = findActivityById( rewindId );
-	const downloadPoint = item ? item.publishedAt : null;
+	const downloadPoint = ( () => {
+		const seconds = parseInt( toIntRewindId( rewindId ), 10 );
+		return Number.isFinite( seconds ) ? new Date( seconds * 1000 ).toISOString() : null;
+	} )();
 	const [ items, setItems ] = useState( DEFAULT_RESTORE_ITEMS );
-	const { state, submit, reset } = useMockDownload();
+	const { state, submit, reset } = useDownload( rewindId );
 
 	return (
 		<DashboardLayout>
