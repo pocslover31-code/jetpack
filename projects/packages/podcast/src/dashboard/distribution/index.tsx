@@ -4,6 +4,7 @@ import {
 	Card,
 	CardBody,
 	Notice,
+	Tooltip,
 	VisuallyHidden,
 	// eslint-disable-next-line @wordpress/no-unsafe-wp-apis
 	__experimentalHStack as HStack,
@@ -15,12 +16,13 @@ import {
 import { useCopyToClipboard } from '@wordpress/compose';
 import { useEntityRecord } from '@wordpress/core-data';
 import { useCallback, useEffect, useState } from '@wordpress/element';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { check, copy } from '@wordpress/icons';
 import { usePodcastSettings } from '../hooks/use-podcast-settings';
 import { useValidationIssues } from '../hooks/use-validation-issues';
 import ConfettiAnimation from './confetti';
 import { PODCAST_APPS } from './podcast-apps';
+import PocketCastsRow from './podcast-apps/pocketcasts/inline-row';
 import './style.scss';
 import SubmitModal from './submit-modal';
 import type { PodcastShowState, PodcatcherId } from '../types';
@@ -37,6 +39,8 @@ const selectOnFocus = ( event: FocusEvent< HTMLInputElement > ) => {
 // validator rejects that shape.
 const COPIED_LABEL = __( 'Copied!', 'jetpack-podcast' );
 const COPY_LINK_LABEL = __( 'Copy link', 'jetpack-podcast' );
+const CHECKING_LABEL = __( 'Checking your podcast setup…', 'jetpack-podcast' );
+const NEED_CATEGORY_LABEL = __( 'Set a podcast category in Settings first', 'jetpack-podcast' );
 const PENDING_LABEL = __( 'Pending', 'jetpack-podcast' );
 const LIVE_LABEL = __( 'Live', 'jetpack-podcast' );
 
@@ -93,7 +97,7 @@ interface DistributionTabProps {
 }
 
 const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
-	const { data: settings } = usePodcastSettings();
+	const { data: settings, isLoading: settingsLoading } = usePodcastSettings();
 	const { issues, isReady, isLoading } = useValidationIssues();
 	const categoryId = settings?.podcasting_category_id ?? 0;
 	// Pull the configured category record so we can derive the feed URL
@@ -112,6 +116,51 @@ const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
 	const [ activeId, setActiveId ] = useState< PodcatcherId | null >( null );
 	const [ showConfetti, setShowConfetti ] = useState( false );
 	const activeApp = PODCAST_APPS.find( a => a.id === activeId ) ?? null;
+
+	// Pocket Casts auto-submits via the wpcom relay and goes live in minutes,
+	// so it only needs a category + title to send a usable feed. The other
+	// directories run manual review and reject incomplete feeds, so they keep
+	// the full validation gate below.
+	const pocketcastsApp = PODCAST_APPS.find( a => a.id === 'pocketcasts' ) ?? null;
+	const directoryApps = PODCAST_APPS.filter( a => a.id !== 'pocketcasts' );
+	const hasTitle = !! settings?.podcasting_title;
+	const isPocketcastsBlocked = settingsLoading || ! isEnabled || ! hasTitle;
+	let pocketcastsBlockedTooltip = '';
+	if ( settingsLoading ) {
+		pocketcastsBlockedTooltip = CHECKING_LABEL;
+	} else if ( ! isEnabled ) {
+		pocketcastsBlockedTooltip = NEED_CATEGORY_LABEL;
+	} else if ( ! hasTitle ) {
+		pocketcastsBlockedTooltip = __( 'Add a podcast title in Settings first', 'jetpack-podcast' );
+	}
+
+	// Single source of truth for "what's blocking submission", so the Notice
+	// header, Submit aria-labels, and Submit tooltips all stay in sync.
+	const stepsLeftLabel =
+		issues.length > 0
+			? sprintf(
+					/* translators: %d: number of remaining setup steps before podcast directory submission is unlocked. */
+					_n(
+						'%d step left before you can submit',
+						'%d steps left before you can submit',
+						issues.length,
+						'jetpack-podcast'
+					),
+					issues.length
+			  )
+			: '';
+	// Check `isLoading` not `! isReady`: once issues exist, `! isReady` stays
+	// true and would pin the tooltip on "Checking…" instead of the count.
+	// Loading is checked first so `categoryId === 0` during the initial fetch
+	// doesn't flash the "Set a category" copy.
+	let blockedTooltip = '';
+	if ( isLoading ) {
+		blockedTooltip = CHECKING_LABEL;
+	} else if ( ! isEnabled ) {
+		blockedTooltip = NEED_CATEGORY_LABEL;
+	} else {
+		blockedTooltip = stepsLeftLabel;
+	}
 
 	const handleSubmitClick = useCallback( ( id: PodcatcherId ) => {
 		jetpackAnalytics.tracks.recordEvent( 'jetpack_podcast_submit_modal_opened', {
@@ -134,7 +183,7 @@ const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
 		<>
 			{ issues.length > 0 && (
 				<Notice status="warning" isDismissible={ false }>
-					<strong>{ __( 'Almost ready to submit', 'jetpack-podcast' ) }</strong>
+					<strong>{ stepsLeftLabel }</strong>
 					<ul className="podcast__settings-issues">
 						{ issues.map( issue => (
 							<li key={ issue }>{ issue }</li>
@@ -149,12 +198,43 @@ const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
 			<Card>
 				<CardBody>
 					<VStack spacing={ 8 }>
+						<Text variant="muted">
+							{ __(
+								'Submit your podcast to the most popular podcast apps so people can find and follow it.',
+								'jetpack-podcast'
+							) }
+						</Text>
+
+						{ pocketcastsApp && (
+							<VStack spacing={ 4 }>
+								<VStack spacing={ 1 }>
+									<h3 className="podcast__card-title">
+										{ __( 'Automattic submission', 'jetpack-podcast' ) }
+									</h3>
+									<Text variant="muted">
+										{ __(
+											'We submit your feed to Pocket Casts for you. It usually goes live within a few minutes.',
+											'jetpack-podcast'
+										) }
+									</Text>
+								</VStack>
+								<PocketCastsRow
+									app={ pocketcastsApp }
+									isBlocked={ isPocketcastsBlocked }
+									blockedTooltip={ pocketcastsBlockedTooltip }
+									onFirstSave={ handleFirstSave }
+								/>
+							</VStack>
+						) }
+
 						<VStack spacing={ 4 }>
 							<VStack spacing={ 1 }>
-								<h3 className="podcast__card-title">{ __( 'RSS feed', 'jetpack-podcast' ) }</h3>
+								<h3 className="podcast__card-title">
+									{ __( 'Manual submission', 'jetpack-podcast' ) }
+								</h3>
 								<Text variant="muted">
 									{ __(
-										'Copy this URL, then submit it to each directory below to publish your podcast.',
+										'Copy this URL, then submit it to each directory through the modals below.',
 										'jetpack-podcast'
 									) }
 								</Text>
@@ -169,22 +249,8 @@ const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
 									) }
 								</Text>
 							) }
-						</VStack>
-
-						<VStack spacing={ 4 }>
-							<VStack spacing={ 1 }>
-								<h3 className="podcast__card-title">
-									{ __( 'Podcast directories', 'jetpack-podcast' ) }
-								</h3>
-								<Text variant="muted">
-									{ __(
-										'Submit your podcast to the directories below where you want it to appear. Most take a few days to go live.',
-										'jetpack-podcast'
-									) }
-								</Text>
-							</VStack>
 							<VStack as="ul" spacing={ 0 } className="podcast__directory-list">
-								{ PODCAST_APPS.map( app => {
+								{ directoryApps.map( app => {
 									const { Logo } = app;
 									const state = settings?.podcasting_show_states?.[ app.id ] ?? '';
 									return (
@@ -202,28 +268,28 @@ const DistributionTab = ( { onEditSettings }: DistributionTabProps ) => {
 												<Text weight={ 500 }>{ app.name }</Text>
 												<StateBadge state={ state } />
 											</HStack>
-											<Button
-												variant="primary"
-												size="compact"
-												// eslint-disable-next-line react/jsx-no-bind
-												onClick={ () => handleSubmitClick( app.id ) }
-												disabled={ isSubmitBlocked }
-												accessibleWhenDisabled
-												aria-label={
-													isSubmitBlocked
-														? sprintf(
-																/* translators: %s is the directory name (Apple Podcasts, Spotify, etc.). */
-																__(
-																	'Submit to %s (finish setting up your podcast first).',
-																	'jetpack-podcast'
-																),
-																app.name
-														  )
-														: undefined
-												}
-											>
-												{ __( 'Submit', 'jetpack-podcast' ) }
-											</Button>
+											<Tooltip text={ isSubmitBlocked ? blockedTooltip : '' }>
+												<Button
+													variant="primary"
+													size="compact"
+													// eslint-disable-next-line react/jsx-no-bind
+													onClick={ () => handleSubmitClick( app.id ) }
+													disabled={ isSubmitBlocked }
+													accessibleWhenDisabled
+													aria-label={
+														isSubmitBlocked
+															? sprintf(
+																	/* translators: 1: directory name (Apple Podcasts, Spotify, etc.). 2: reason the Set up button is disabled. */
+																	__( 'Set up %1$s. %2$s', 'jetpack-podcast' ),
+																	app.name,
+																	blockedTooltip
+															  )
+															: undefined
+													}
+												>
+													{ __( 'Set up', 'jetpack-podcast' ) }
+												</Button>
+											</Tooltip>
 										</HStack>
 									);
 								} ) }
