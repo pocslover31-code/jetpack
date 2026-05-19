@@ -12,7 +12,6 @@ namespace Automattic\Jetpack\Podcast;
 use Automattic\Jetpack\Podcast\Feed\Customize_Feed;
 use Throwable;
 use WP_Post;
-use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_User;
@@ -93,7 +92,7 @@ class Tracks {
 			}
 
 			// Match the RSS feed's definition of an episode — must carry
-			// audio, not just sit in the podcast category.
+			// podcast media, not just sit in the podcast category.
 			if ( ! self::has_podcast_media( $post ) ) {
 				return;
 			}
@@ -380,20 +379,11 @@ class Tracks {
 	 * @param int $current_post_id Post being published (excluded from the check).
 	 */
 	private static function is_first_episode_for_site( int $category_id, int $current_post_id ): bool {
-		$existing = new WP_Query(
-			array(
-				'post_status'      => 'publish',
-				'post_type'        => 'post',
-				'cat'              => $category_id,
-				'post__not_in'     => array( $current_post_id ),
-				'posts_per_page'   => 1,
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'suppress_filters' => true,
-			)
-		);
+		if ( get_option( 'podcast_show_launched_tracked', false ) ) {
+			return false;
+		}
 
-		return empty( $existing->posts );
+		return ! Episode_Query::has_published_episode( $category_id, $current_post_id );
 	}
 
 	/**

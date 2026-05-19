@@ -5,6 +5,7 @@
 
 namespace Automattic\Jetpack\Podcast\Tests;
 
+use Automattic\Jetpack\Podcast\Episode_Query;
 use Automattic\Jetpack\Podcast\Tracks;
 use PHPUnit\Framework\Attributes\CoversClass;
 use WorDBless\BaseTestCase;
@@ -20,8 +21,10 @@ use WP_Term;
  * events are read out of the bootstrap shim's global buffer.
  *
  * @covers \Automattic\Jetpack\Podcast\Tracks
+ * @covers \Automattic\Jetpack\Podcast\Episode_Query
  */
 #[CoversClass( Tracks::class )]
+#[CoversClass( Episode_Query::class )]
 class Tracks_Test extends BaseTestCase {
 
 	protected function setUp(): void {
@@ -44,6 +47,7 @@ class Tracks_Test extends BaseTestCase {
 		delete_option( 'podcasting_email' );
 		delete_option( 'podcasting_talent_name' );
 		delete_option( 'podcast_show_launched_tracked' );
+		remove_all_filters( 'posts_pre_query' );
 		wp_cache_flush();
 		WorDBless_Posts::init()->clear_all_posts();
 		WorDBless_Users::init()->clear_all_users();
@@ -101,7 +105,9 @@ class Tracks_Test extends BaseTestCase {
 			)
 		);
 		wp_cache_set( (int) $post_id, array( $category_id ), 'category_relationships' );
-		return get_post( (int) $post_id );
+		$post               = get_post( (int) $post_id );
+		$post->post_content = $content;
+		return $post;
 	}
 
 	public function test_episode_published_emits_for_first_published_post_in_category() {
@@ -181,6 +187,98 @@ class Tracks_Test extends BaseTestCase {
 		Tracks::record_episode_published( $post->ID, $post, false, null );
 
 		$this->assertEmpty( $this->events_named( 'wpcom_podcast_episode_published' ) );
+	}
+
+	public function test_episode_published_emits_for_podcast_episode_block() {
+		$cat_id = $this->configure_podcast_category();
+		$post   = $this->insert_post_in_category(
+			$cat_id,
+			'publish',
+			'<!-- wp:jetpack/podcast-episode {"mediaUrl":"https://example.org/episode.mp3","mediaType":"audio"} /-->'
+		);
+
+		Tracks::record_episode_published( $post->ID, $post, false, null );
+
+		$events = $this->events_named( 'wpcom_podcast_episode_published' );
+		$this->assertCount( 1, $events );
+		$this->assertSame( $post->ID, $events[0]['properties']['post_id'] );
+	}
+
+	public function test_episode_published_skips_empty_podcast_episode_block() {
+		$cat_id = $this->configure_podcast_category();
+		$post   = $this->insert_post_in_category(
+			$cat_id,
+			'publish',
+			'<!-- wp:jetpack/podcast-episode /-->'
+		);
+
+		Tracks::record_episode_published( $post->ID, $post, false, null );
+
+		$this->assertEmpty( $this->events_named( 'wpcom_podcast_episode_published' ) );
+	}
+
+	public function test_episode_published_emits_for_video_episode_block() {
+		$cat_id = $this->configure_podcast_category();
+		$post   = $this->insert_post_in_category(
+			$cat_id,
+			'publish',
+			'<!-- wp:jetpack/podcast-episode {"mediaUrl":"https://example.org/episode.mp4","mediaType":"video"} /-->'
+		);
+
+		Tracks::record_episode_published( $post->ID, $post, false, null );
+
+		$events = $this->events_named( 'wpcom_podcast_episode_published' );
+		$this->assertCount( 1, $events );
+		$this->assertSame( $post->ID, $events[0]['properties']['post_id'] );
+	}
+
+	public function test_first_episode_ignores_prior_non_episode_posts_in_category() {
+		$cat_id  = $this->configure_podcast_category();
+		$regular = $this->insert_post_in_category( $cat_id, 'publish', 'A regular post without podcast media.' );
+
+		$post = $this->insert_post_in_category( $cat_id );
+		add_filter(
+			'posts_pre_query',
+			static function ( $posts, $query ) use ( $regular ) {
+				return 'post' === $query->get( 'post_type' ) ? array( $regular ) : $posts;
+			},
+			10,
+			2
+		);
+		Tracks::record_episode_published( $post->ID, $post, false, null );
+
+		$events = $this->events_named( 'wpcom_podcast_episode_published' );
+		$this->assertCount( 1, $events );
+		$this->assertTrue( $events[0]['properties']['is_first_episode_for_site'] );
+		$this->assertCount( 1, $this->events_named( 'wpcom_podcast_show_launched' ) );
+	}
+
+	public function test_first_episode_is_false_when_show_launch_already_tracked() {
+		$cat_id = $this->configure_podcast_category();
+		$post   = $this->insert_post_in_category( $cat_id );
+
+		update_option( 'podcast_show_launched_tracked', time(), false );
+
+		$query_ran = false;
+		add_filter(
+			'posts_pre_query',
+			static function ( $posts, $query ) use ( &$query_ran ) {
+				if ( 'post' === $query->get( 'post_type' ) ) {
+					$query_ran = true;
+				}
+				return $posts;
+			},
+			10,
+			2
+		);
+
+		Tracks::record_episode_published( $post->ID, $post, false, null );
+
+		$events = $this->events_named( 'wpcom_podcast_episode_published' );
+		$this->assertCount( 1, $events );
+		$this->assertFalse( $events[0]['properties']['is_first_episode_for_site'] );
+		$this->assertFalse( $query_ran );
+		$this->assertEmpty( $this->events_named( 'wpcom_podcast_show_launched' ) );
 	}
 
 	public function test_media_uploaded_emits_for_audio_when_podcasting_enabled() {
