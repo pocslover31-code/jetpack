@@ -93,7 +93,7 @@ class REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'post_threat_ignore' ),
-				'permission_callback' => array( __CLASS__, 'permissions_check' ),
+				'permission_callback' => array( __CLASS__, 'permissions_check_user' ),
 				'args'                => array(
 					'id' => array(
 						'type'              => 'string',
@@ -110,7 +110,7 @@ class REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'post_threat_unignore' ),
-				'permission_callback' => array( __CLASS__, 'permissions_check' ),
+				'permission_callback' => array( __CLASS__, 'permissions_check_user' ),
 				'args'                => array(
 					'id' => array(
 						'type'              => 'string',
@@ -127,7 +127,7 @@ class REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'post_threats_fix' ),
-				'permission_callback' => array( __CLASS__, 'permissions_check' ),
+				'permission_callback' => array( __CLASS__, 'permissions_check_user' ),
 				'args'                => array(
 					'threat_ids' => array(
 						'type'     => 'array',
@@ -146,7 +146,7 @@ class REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( __CLASS__, 'post_scan_enqueue' ),
-				'permission_callback' => array( __CLASS__, 'permissions_check' ),
+				'permission_callback' => array( __CLASS__, 'permissions_check_user' ),
 			)
 		);
 
@@ -182,6 +182,38 @@ class REST_Controller {
 				'rest_forbidden',
 				esc_html__( 'You do not have permission to access this resource.', 'jetpack-scan-page' ),
 				array( 'status' => 401 )
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Permission callback for mutation routes. Same admin gate as
+	 * `permissions_check()` plus an explicit user-connection check so
+	 * `Client::wpcom_json_api_request_as_user` can't silently fall back
+	 * to blog auth and mis-attribute writes.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function permissions_check_user() {
+		$admin = self::permissions_check();
+		if ( is_wp_error( $admin ) ) {
+			return $admin;
+		}
+
+		$connection = new \Automattic\Jetpack\Connection\Manager();
+		if ( ! $connection->is_user_connected() ) {
+			// 403 matches the convention `activity-log` already uses for the
+			// same case (admin authenticated, but no user-level WPCOM
+			// connection — `Client::wpcom_json_api_request_as_user` would
+			// otherwise fall back to blog auth). 401 would be defensible
+			// (RFC 7235 "missing credential"), but Activity Log is the
+			// closest in-monorepo precedent, so we mirror it.
+			return new WP_Error(
+				'rest_no_user_connection',
+				esc_html__( 'You must connect your WordPress.com account to perform this action.', 'jetpack-scan-page' ),
+				array( 'status' => 403 )
 			);
 		}
 
