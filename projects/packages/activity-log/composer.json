@@ -10,7 +10,8 @@
 		"automattic/jetpack-autoloader": "@dev",
 		"automattic/jetpack-composer-plugin": "@dev",
 		"automattic/jetpack-connection": "@dev",
-		"automattic/jetpack-status": "@dev"
+		"automattic/jetpack-status": "@dev",
+		"automattic/jetpack-wp-abilities": "@dev"
 	},
 	"require-dev": {
 		"automattic/jetpack-changelogger": "@dev",
@@ -26,6 +27,11 @@
 			"src/"
 		]
 	},
+	"autoload-dev": {
+		"psr-4": {
+			"Automattic\\Jetpack\\Activity_Log\\": "tests/php"
+		}
+	},
 	"scripts": {
 		"build-development": [
 			"pnpm run build"
@@ -36,6 +42,12 @@
 		"watch": [
 			"Composer\\Config::disableProcessTimeout",
 			"pnpm run watch"
+		],
+		"phpunit": [
+			"phpunit-select-config phpunit.#.xml.dist --colors=always"
+		],
+		"test-php": [
+			"@composer phpunit"
 		]
 	},
 	"repositories": [
