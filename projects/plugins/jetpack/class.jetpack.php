@@ -758,6 +758,28 @@ class Jetpack {
 
 		// Register Jetpack module management abilities (WordPress Abilities API, WP 6.9+).
 		\Automattic\Jetpack\Plugin\Abilities\Modules_Abilities::init();
+
+		// Register Jetpack Plans abilities, but only when the site is connected —
+		// plan data is meaningless without a WordPress.com connection. The
+		// jetpack-plans package no longer self-registers via autoload, so the
+		// Jetpack plugin owns this wiring for now.
+		//
+		// The connection check is deferred to `plugins_loaded`: this code runs
+		// inside Jetpack::__construct(), before Jetpack::init() has assigned
+		// self::$instance. Calling self::is_connection_ready() here would chain
+		// is_connection_ready() -> self::connection() -> Jetpack::init() ->
+		// new Jetpack() while the singleton is still being constructed, which
+		// recurses infinitely (memory exhaustion / 500). By plugins_loaded the
+		// singleton exists, and Registrar::init() still defers the actual
+		// ability registration to the wp_abilities_api_init action.
+		add_action(
+			'plugins_loaded',
+			static function () {
+				if ( self::is_connection_ready() ) {
+					\Automattic\Jetpack\Plans\Abilities\Plans_Abilities::init();
+				}
+			}
+		);
 	}
 
 	/**

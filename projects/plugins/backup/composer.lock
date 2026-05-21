@@ -1180,7 +1180,7 @@
             "dist": {
                 "type": "path",
                 "url": "../../packages/my-jetpack",
-                "reference": "7cfabab251f5075e4aae10e2c80bfb79575a2b4b"
+                "reference": "388ac1533174cb7b8edb0ebf7d6cdc0f84a6f799"
             },
             "require": {
                 "automattic/jetpack-admin-ui": "@dev",
@@ -1197,6 +1197,7 @@
                 "automattic/jetpack-redirect": "@dev",
                 "automattic/jetpack-status": "@dev",
                 "automattic/jetpack-sync": "@dev",
+                "automattic/jetpack-wp-abilities": "@dev",
                 "php": ">=7.2"
             },
             "require-dev": {
@@ -1337,14 +1338,15 @@
             "dist": {
                 "type": "path",
                 "url": "../../packages/plans",
-                "reference": "ef664f6fcfde0b888d66e6f3d9893daeb4fa75a0"
+                "reference": "2083b83ebfcdf5ca31d8ea92a9769556aa8ddcaf"
             },
             "require": {
                 "automattic/jetpack-connection": "@dev",
+                "automattic/jetpack-status": "@dev",
+                "automattic/jetpack-wp-abilities": "@dev",
                 "php": ">=7.2"
             },
             "require-dev": {
-                "automattic/jetpack-status": "@dev",
                 "automattic/jetpack-test-environment": "@dev",
                 "automattic/phpunit-select-config": "@dev",
                 "yoast/phpunit-polyfills": "^4.0.0"
@@ -1356,6 +1358,7 @@
             "extra": {
                 "autotagger": true,
                 "mirror-repo": "Automattic/jetpack-plans",
+                "textdomain": "jetpack-plans",
                 "changelogger": {
                     "link-template": "https://github.com/Automattic/jetpack-plans/compare/v${old}...v${new}"
                 },
