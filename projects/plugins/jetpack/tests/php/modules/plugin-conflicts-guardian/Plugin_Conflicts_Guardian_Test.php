@@ -2,26 +2,26 @@
 /**
  * Tests for the pure helpers in the Plugin Conflicts Guardian feature.
  *
- * @package automattic/jetpack-mu-wpcom
+ * @package automattic/jetpack
  */
 
-use Automattic\Jetpack\Jetpack_Mu_Wpcom;
 use PHPUnit\Framework\Attributes\DataProvider;
 
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/pcg-log.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/class-pcg-load-tester.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/activation-guard.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/update-guard.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/class-pcg-snapshot.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/class-pcg-rollback.php';
-require_once Jetpack_Mu_Wpcom::PKG_DIR . 'src/features/plugin-conflicts-guardian/update-healthcheck.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/pcg-log.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/class-pcg-load-tester.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/activation-guard.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/update-guard.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/class-pcg-snapshot.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/class-pcg-rollback.php';
+require_once JETPACK__PLUGIN_DIR . 'modules/plugin-conflicts-guardian/update-healthcheck.php';
 
 /**
  * Exercises the pure / near-pure helpers: transient keying, error-reason
  * formatting, errno-name mapping, the update guard's parse-error sweep, and
  * the upgrader_source_selection filter callback.
  */
-class Plugin_Conflicts_Guardian_Test extends \WorDBless\BaseTestCase {
+class Plugin_Conflicts_Guardian_Test extends \WP_UnitTestCase {
+	use \Automattic\Jetpack\PHPUnit\WP_UnitTestCase_Fix;
 
 	/**
 	 * Absolute path to a temporary directory used by scan tests.
@@ -29,6 +29,16 @@ class Plugin_Conflicts_Guardian_Test extends \WorDBless\BaseTestCase {
 	 * @var string|null
 	 */
 	private $tmp_dir = null;
+
+	/**
+	 * Suppress PCG's event dispatch for the duration of each test, so its
+	 * `error_log()` logging fallback doesn't trip PHPUnit's strict-output
+	 * check when a test exercises a guard block path.
+	 */
+	public function set_up() {
+		parent::set_up();
+		add_filter( 'pcg_log_enabled', '__return_false' );
+	}
 
 	/**
 	 * Clean up any temp directory and guard filter after each test.
@@ -47,6 +57,7 @@ class Plugin_Conflicts_Guardian_Test extends \WorDBless\BaseTestCase {
 		remove_all_filters( 'pcg_guard_activation' );
 		remove_all_filters( 'pcg_guard_updates' );
 		remove_all_filters( 'pcg_backup_root' );
+		remove_all_filters( 'pcg_log_enabled' );
 		parent::tear_down();
 	}
 
