@@ -31,6 +31,7 @@ import {
 	customPostType,
 	filter,
 	formatListBullets,
+	formatListNumbered,
 	funnel,
 	grid,
 	info,
@@ -65,6 +66,7 @@ const BLOCK_ICONS = {
 	'jetpack-search/filter-checkbox': greened( formatListBullets ),
 	'jetpack-search/filter-date': greened( calendar ),
 	'jetpack-search/filter-post-type': greened( customPostType ),
+	'jetpack-search/filter-static': greened( formatListNumbered ),
 	'jetpack-search/filter-wc-attribute': greened( tag ),
 	'jetpack-search/filter-wc-price': greened( currencyDollar ),
 	'jetpack-search/filter-wc-rating': greened( starFilled ),
@@ -99,7 +101,7 @@ const BLOCK_ICONS = {
  * (the only practical way to brand variation icons when the variations
  * themselves are PHP-registered). Glyphs are picked from `@wordpress/icons`
  * and intentionally avoid every name already used in `BLOCK_ICONS` so the
- * full 19 + 8 set has no duplicates.
+ * full 20 + 8 set has no duplicates.
  */
 const FILTER_CHECKBOX_VARIATION_ICONS = {
 	category: greened( category ),
