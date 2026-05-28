@@ -1,0 +1,35 @@
+.container {
+	block-size: 100%;
+	min-inline-size: 0;
+	overflow: auto;
+}
+
+.stack {
+	block-size: 100%;
+	min-block-size: 0;
+}
+
+.footer {
+	flex-shrink: 0;
+	padding-block: var(--wpds-dimension-padding-md);
+	padding-inline: var(--wpds-dimension-padding-lg);
+}
+
+.fromDisplayName,
+.fromEmail {
+	display: block;
+	max-inline-size: 12.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.fromEmail {
+	color: var(--wpds-color-fg-content-neutral-weak);
+}
+
+.error {
+	color: var(--wpds-color-fg-content-error);
+	padding: var(--wpds-dimension-padding-lg);
+	text-align: center;
+}
