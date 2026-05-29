@@ -689,8 +689,8 @@ export default function usePageHeaderDetails(
 								isOpen={ emptySpam.isConfirmDialogOpen }
 								onCancel={ emptySpam.closeConfirmDialog }
 								onConfirm={ emptySpam.onConfirmEmptying }
-								totalItemsSpam={ emptySpam.totalItemsSpam }
-								selectedResponsesCount={ emptySpam.selectedResponsesCount }
+								scopeMode={ emptySpam.scope.mode }
+								count={ emptySpam.scope.count }
 							/>,
 					  ]
 					: [] ),
@@ -863,8 +863,8 @@ export default function usePageHeaderDetails(
 		emptySpam.isConfirmDialogOpen,
 		emptySpam.closeConfirmDialog,
 		emptySpam.onConfirmEmptying,
-		emptySpam.totalItemsSpam,
-		emptySpam.selectedResponsesCount,
+		emptySpam.scope.mode,
+		emptySpam.scope.count,
 		renameFormItem,
 		closeRenameModal,
 		handleRename,
