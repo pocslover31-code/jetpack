@@ -1,0 +1,58 @@
+.container {
+	position: relative;
+	block-size: 100%;
+	overflow: hidden;
+	container-type: size;
+}
+
+.chartBackground {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.chart {
+	block-size: 100%;
+	inline-size: 100%;
+	opacity: 0.45;
+}
+
+.chart [data-testid="responsive-wrapper"] {
+	block-size: 100%;
+	inline-size: 100%;
+}
+
+.stack {
+	position: relative;
+	z-index: 1;
+	block-size: 100%;
+	min-inline-size: 0;
+	padding: var(--wpds-dimension-padding-2xl);
+	text-align: center;
+}
+
+.counter {
+	--counter-chars: 1;
+	--counter-fit:
+ calc((100cqw - 2 * var(--wpds-dimension-padding-2xl, 24px)) / (var(--counter-chars) * 0.55));
+
+	display: inline-flex;
+	align-items: baseline;
+	max-inline-size: 100%;
+	white-space: nowrap;
+	font-size: min(2.5rem, max(1.75rem, var(--counter-fit)));
+	font-weight: 600;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.02em;
+	color: var(--wpds-color-fg-content-neutral);
+}
+
+.counterLoading {
+	opacity: 0.85;
+}
+
+.error {
+	color: var(--wpds-color-fg-content-error);
+}
