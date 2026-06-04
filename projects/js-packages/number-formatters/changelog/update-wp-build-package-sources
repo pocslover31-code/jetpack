@@ -1,0 +1,4 @@
+Significance: patch
+Type: changed
+
+Add wpScriptModuleExports and expose ./package.json in exports so wp-build convention discovery can register this as a shared script module.

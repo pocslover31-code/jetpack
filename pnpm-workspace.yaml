@@ -75,6 +75,12 @@ ignoredOptionalDependencies:
 # Dependencies needing patching.
 patchedDependencies:
 
+  # Decouple script-module identity from `wpPlugin.packageNamespace`, discover
+  # script-module packages outside `./packages/` via convention, and scope the
+  # deregister-before-register to `@wordpress/*`.
+  # Upstream PRs: https://github.com/WordPress/gutenberg/pull/78822 + /pull/77465
+  '@wordpress/build@0.14.0': .pnpm-patches/@wordpress__build@0.14.0.patch
+
   # Vite/esbuild doesn't like the `__esModule` + `exports["default"]` pattern, it winds up double-wrapping the default.
   # See also https://github.com/WordPress/gutenberg/issues/39619
   react-autosize-textarea: .pnpm-patches/react-autosize-textarea.patch

@@ -16,7 +16,7 @@
 			{
 				"id": "jetpack-premium-analytics",
 				"init": [
-					"@jetpack-premium-analytics/init"
+					"@automattic/jetpack-premium-analytics-init"
 				]
 			}
 		],
@@ -28,8 +28,10 @@
 		}
 	},
 	"dependencies": {
+		"@automattic/number-formatters": "workspace:*",
 		"@wordpress/boot": "0.13.0",
 		"@wordpress/data": "10.46.0",
+		"@wordpress/element": "^6.22.0",
 		"@wordpress/i18n": "^6.9.0",
 		"@wordpress/icons": "^13.0.0",
 		"@wordpress/route": "0.12.0",
