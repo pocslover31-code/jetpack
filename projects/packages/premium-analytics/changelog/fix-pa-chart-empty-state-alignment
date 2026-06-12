@@ -1,0 +1,4 @@
+Significance: patch
+Type: fixed
+
+Center chart empty states across the full widget width and cap the description text, matching the upstream design-system EmptyState styling.

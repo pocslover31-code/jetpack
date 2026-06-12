@@ -5,6 +5,7 @@
 	"type": "module",
 	"main": "src/index.ts",
 	"types": "src/index.ts",
+	"wpScriptModuleExports": "./src/index.ts",
 	"sideEffects": false,
 	"dependencies": {
 		"@date-fns/tz": "1.4.1",

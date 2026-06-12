@@ -132,11 +132,22 @@ export const queryClient = new QueryClient( {
 	},
 } );
 
-export const AnalyticsQueryClientProvider = ( { children }: { children: ReactNode } ) => {
+export const AnalyticsQueryClientProvider = ( {
+	children,
+	withDevtools = true,
+}: {
+	children: ReactNode;
+	/**
+	 * Whether to render the React Query devtools (dev builds only). Hosts that
+	 * mount one provider per widget should pass `false` so the devtools render
+	 * once at the page level rather than inside every widget.
+	 */
+	withDevtools?: boolean;
+} ) => {
 	return (
 		<QueryClientProvider client={ queryClient }>
 			<>{ children }</>
-			{ ReactQueryDevtools && (
+			{ withDevtools && ReactQueryDevtools && (
 				<Suspense fallback={ null }>
 					<ReactQueryDevtools initialIsOpen={ false } />
 				</Suspense>

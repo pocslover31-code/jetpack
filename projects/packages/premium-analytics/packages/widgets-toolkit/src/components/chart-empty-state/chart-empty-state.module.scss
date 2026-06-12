@@ -4,9 +4,22 @@
 	justify-content: center;
 	height: 100%;
 	width: 100%;
+
+	/* @wordpress/ui's EmptyState.Root caps itself at
+	   --wpds-dimension-surface-width-sm, which leaves the block hugging the
+	   left edge of wide widgets. The upstream @automattic/design-system
+	   EmptyState has no root max-width, so lift the cap to keep the icon and
+	   text centered across the full chart area. */
+	max-width: none;
 	gap: var(--wpds-dimension-gap-lg);
 }
 
 .icon {
 	color: var(--wpds-color-stroke-surface-neutral-weak, #e0e0e0);
+}
+
+/* Match the @automattic/design-system EmptyState used upstream, which caps
+   the description text instead of the root container. */
+.description {
+	max-width: 350px;
 }

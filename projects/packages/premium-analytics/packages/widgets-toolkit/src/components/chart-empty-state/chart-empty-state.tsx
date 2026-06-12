@@ -51,7 +51,7 @@ export function ChartEmptyState( {
 	return (
 		<EmptyState.Root className={ styles.container }>
 			{ icon && <Icon size={ 48 } className={ styles.icon } icon={ icon } /> }
-			<EmptyState.Description>{ text }</EmptyState.Description>
+			<EmptyState.Description className={ styles.description }>{ text }</EmptyState.Description>
 		</EmptyState.Root>
 	);
 }

@@ -43,3 +43,12 @@ export { fetchReportBookings } from './report-bookings-fetch';
 export { fetchReportSessionsByDevice } from './report-sessions-by-device-fetch';
 export { exportReport } from './report-export-fetch';
 export type { ExportReportParams, ExportReportResponse } from './report-export-fetch';
+export {
+	fetchStats,
+	fetchStatsBlogId,
+	fetchStatsVideoPlays,
+	type StatsQueryArgs,
+	type StatsVideoPlay,
+	type StatsVideoPlaysResponse,
+	type RequestStatsVideoPlaysParams,
+} from './stats-fetch';

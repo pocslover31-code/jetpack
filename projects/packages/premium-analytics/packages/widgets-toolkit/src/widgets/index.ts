@@ -25,3 +25,4 @@ export { CouponUseWidget } from './coupon-use';
 export { PaymentStatusWidget } from './payment-status';
 export { OrdersFulfillmentWidget } from './orders-fulfillment';
 export { VisitorsByLocationWidget } from './visitors-by-location';
+export { VideosWidget } from './videos';

@@ -39,3 +39,19 @@ export { getDefaultIntervalForPeriod, getDateFormatFromInterval } from './utils/
 export { getDefaultPreset, getDefaultQueryParams } from './defaults';
 export { exportReport } from './api';
 export type { ExportReportParams, ExportReportResponse } from './api';
+
+// Jetpack Stats (proxied through the stats-admin REST proxy).
+export { useStatsBlogId } from './hooks/use-stats-blog-id';
+export { useStatsVideoPlays } from './hooks/use-stats-video-plays';
+export { statsBlogIdQuery, statsQuery, statsVideoPlaysQuery } from './queries/stats-query';
+export { fetchStats, fetchStatsBlogId, fetchStatsVideoPlays } from './api/stats-fetch';
+export type {
+	StatsQueryArgs,
+	StatsVideoPlay,
+	StatsVideoPlaysResponse,
+	RequestStatsVideoPlaysParams,
+} from './api/stats-fetch';
+export type {
+	SanitizedStatsVideoPlay,
+	SanitizedStatsVideoPlaysResponse,
+} from './processing/stats-video-plays';

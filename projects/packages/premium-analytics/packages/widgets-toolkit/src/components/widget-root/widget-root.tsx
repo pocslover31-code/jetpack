@@ -118,7 +118,7 @@ export function WidgetRoot( { attributes, children, setError, options }: WidgetR
 	const contextValue = useMemo( () => ( { reportParams, setError } ), [ reportParams, setError ] );
 
 	return (
-		<AnalyticsQueryClientProvider>
+		<AnalyticsQueryClientProvider withDevtools={ false }>
 			<GlobalChartsProvider theme={ chartTheme }>
 				<WidgetRootContext.Provider value={ contextValue }>
 					<div className={ styles.root }>{ children }</div>
