@@ -582,9 +582,7 @@ class Jetpack_Memberships {
 	 * @return string
 	 */
 	public function deprecated_render_button_v1( $attrs, $plan_id ) {
-		$button_label = isset( $attrs['submitButtonText'] )
-			? $attrs['submitButtonText']
-			: __( 'Your contribution', 'jetpack' );
+		$button_label = $attrs['submitButtonText'] ?? __( 'Your contribution', 'jetpack' );
 
 		$button_styles = array();
 		if ( ! empty( $attrs['customBackgroundButtonColor'] ) ) {
@@ -719,7 +717,6 @@ class Jetpack_Memberships {
 	 */
 	public static function user_can_edit() {
 		$user = wp_get_current_user();
-		// phpcs:ignore ImportDetection.Imports.RequireImports.Symbol
 		return 0 !== $user->ID && current_user_can( 'edit_post', get_the_ID() );
 	}
 

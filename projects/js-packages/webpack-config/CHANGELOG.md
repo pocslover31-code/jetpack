@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.9.3 - 2026-06-09
+### Changed
+- Update package dependencies. [#49273]
+
+## 3.9.2 - 2026-06-08
+### Changed
+- Update dependencies.
+
+## 3.9.1 - 2026-06-03
+### Changed
+- Update dependencies.
+
+## 3.9.0 - 2026-06-02
+### Changed
+- Remove use of `.npmrc` environment variable for setting condition names. The "jetpack:src" condition is now always added. [#49314]
+
+## 3.8.7 - 2026-05-21
+### Changed
+- Update package dependencies. [#48405]
+
+## 3.8.6 - 2026-05-19
+### Changed
+- Update package dependencies. [#48910]
+
+## 3.8.5 - 2026-05-13
+### Changed
+- Remove the generateI18nVariants helper from replace-textdomain Babel config. [#48355]
+
+## 3.8.4 - 2026-05-11
+### Changed
+- Build: Remove the @wordpress/admin-ui CSS bundle workaround from the default request map. [#48410]
+
+## 3.8.3 - 2026-05-04
+### Changed
+- Internal: No longer require automattic/jetpack-changelogger as a per-project dev dependency. [#48225]
+
+## 3.8.2 - 2026-04-20
+### Changed
+- Update package dependencies. [#48106]
+
 ## 3.8.1 - 2026-04-09
 ### Changed
 - Update package dependencies. [#47890] [#47998]

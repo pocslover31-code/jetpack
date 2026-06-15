@@ -35,6 +35,9 @@ class Jetpack_Subscriptions_Test extends WP_UnitTestCase {
 		parent::set_up();
 		Jetpack_Subscriptions::init();
 		add_filter( 'jetpack_is_connection_ready', '__return_true' );
+		// Block refresh endpoint HTTP calls in tests by default so stale tokens deny
+		// access (existing test expectations). Individual refresh tests can override.
+		add_filter( 'pre_http_request', array( $this, 'block_refresh_endpoint' ), 10, 3 );
 		$this->set_up_users();
 	}
 
@@ -42,8 +45,34 @@ class Jetpack_Subscriptions_Test extends WP_UnitTestCase {
 		// Clean up
 		remove_all_filters( 'earn_get_user_subscriptions_for_site_id' );
 		remove_all_filters( 'jetpack_is_connection_ready' );
+		remove_all_filters( 'pre_http_request' );
 
 		parent::tear_down();
+	}
+
+	/**
+	 * Default pre_http_request mock for the refresh endpoint — returns a 500 so that
+	 * refresh attempts fail transiently and the existing "expired subscription denies
+	 * access" expectations in the access matrix still hold.
+	 *
+	 * @param mixed  $preempt Current preempt value.
+	 * @param array  $args    Request args.
+	 * @param string $url     Request URL.
+	 * @return mixed
+	 */
+	public function block_refresh_endpoint( $preempt, $args, $url ) {
+		if ( false !== strpos( $url, 'memberships/token/refresh' ) ) {
+			return array(
+				'response' => array(
+					'code'    => 500,
+					'message' => 'blocked in tests',
+				),
+				'body'     => '',
+				'headers'  => array(),
+				'cookies'  => array(),
+			);
+		}
+		return $preempt;
 	}
 
 	private function set_up_users() {
@@ -355,17 +384,20 @@ class Jetpack_Subscriptions_Test extends WP_UnitTestCase {
 	 * @param int    $subscription_end_date
 	 * @param string $status
 	 * @param int    $product_id
+	 * @param bool   $is_comp Whether the subscription represents a complimentary grant.
 	 * @return array
 	 */
-	private function get_payload( $is_subscribed, $is_paid_subscriber = false, $subscription_end_date = null, $status = null, $product_id = 0 ) {
-		$product_id    = $product_id ? $product_id : $this->product_id;
-		$subscriptions = ! $is_paid_subscriber ? array() : array(
-			$product_id => array(
-				'status'     => $status ? $status : 'active',
-				'end_date'   => $subscription_end_date ? $subscription_end_date : time() + HOUR_IN_SECONDS,
-				'product_id' => $product_id,
-			),
+	private function get_payload( $is_subscribed, $is_paid_subscriber = false, $subscription_end_date = null, $status = null, $product_id = 0, $is_comp = false ) {
+		$product_id   = $product_id ? $product_id : $this->product_id;
+		$subscription = array(
+			'status'     => $status ? $status : 'active',
+			'end_date'   => $subscription_end_date ? $subscription_end_date : time() + HOUR_IN_SECONDS,
+			'product_id' => $product_id,
 		);
+		if ( $is_comp ) {
+			$subscription['is_comp'] = true;
+		}
+		$subscriptions = ! $is_paid_subscriber ? array() : array( $product_id => $subscription );
 
 		return array(
 			'blog_sub'      => $is_subscribed ? 'active' : 'inactive',
@@ -595,7 +627,7 @@ class Jetpack_Subscriptions_Test extends WP_UnitTestCase {
 			'earn_get_user_subscriptions_for_site_id',
 			static function ( $subscriptions, $subscriber_id ) use ( $paid_subscriber_id, $payload ) {
 				if ( $subscriber_id === $paid_subscriber_id ) {
-					$subscriptions = array_merge( $subscriptions, isset( $payload['subscriptions'] ) ? $payload['subscriptions'] : array() );
+					$subscriptions = array_merge( $subscriptions, $payload['subscriptions'] ?? array() );
 				}
 
 				return $subscriptions;
@@ -781,6 +813,56 @@ class Jetpack_Subscriptions_Test extends WP_UnitTestCase {
 
 		if ( defined( 'IS_ATOMIC' ) && IS_ATOMIC ) {
 			// Removing filter.
+			remove_filter( 'jetpack_is_connection_ready', '__return_true', 1000 );
+		}
+	}
+
+	public function test_newsletter_tier_comp_bypasses_price_gate() {
+		$bronze_tier_plan_id        = 1100;
+		$bronze_tier_annual_plan_id = 2100;
+		$silver_tier_plan_id        = 3100;
+		$silver_tier_annual_plan_id = 5100;
+
+		if ( defined( 'IS_ATOMIC' ) && IS_ATOMIC ) {
+			add_filter( 'jetpack_is_connection_ready', '__return_true', 1000 );
+		}
+
+		$this->setup_jetpack_tier( $bronze_tier_plan_id, $bronze_tier_annual_plan_id, 10, 100 );
+		$silver_tier_id = $this->setup_jetpack_tier( $silver_tier_plan_id, $silver_tier_annual_plan_id, 20, 200 );
+
+		$post_access_level       = 'paid_subscribers';
+		$newsletter_paid_post_id = $this->setup_jetpack_paid_newsletters();
+		update_post_meta( $newsletter_paid_post_id, META_NAME_FOR_POST_LEVEL_ACCESS_SETTINGS, $post_access_level );
+		update_post_meta( $newsletter_paid_post_id, META_NAME_FOR_POST_TIER_ID_SETTINGS, $silver_tier_id );
+
+		$GLOBALS['post'] = get_post( $newsletter_paid_post_id );
+
+		// A bronze paid subscription is below the silver tier price - normally blocked.
+		$subscription_service = $this->set_returned_token(
+			$this->get_payload( true, true, null, null, $bronze_tier_plan_id )
+		);
+		$this->assertFalse( $subscription_service->visitor_can_view_content( Jetpack_Memberships::get_all_newsletter_plan_ids(), $post_access_level ) );
+
+		// Same bronze plan but flagged as a comp - should bypass the tier price gate.
+		$subscription_service = $this->set_returned_token(
+			$this->get_payload( true, true, null, null, $bronze_tier_plan_id, true )
+		);
+		$this->assertTrue( $subscription_service->visitor_can_view_content( Jetpack_Memberships::get_all_newsletter_plan_ids(), $post_access_level ) );
+
+		// Expired comp should NOT bypass the tier gate.
+		$subscription_service = $this->set_returned_token(
+			$this->get_payload( true, true, time() - HOUR_IN_SECONDS, null, $bronze_tier_plan_id, true )
+		);
+		$this->assertFalse( $subscription_service->visitor_can_view_content( Jetpack_Memberships::get_all_newsletter_plan_ids(), $post_access_level ) );
+
+		// Comp for a product_id with no matching plan on this site should NOT bypass the tier gate.
+		$unknown_product_id   = 9999;
+		$subscription_service = $this->set_returned_token(
+			$this->get_payload( true, true, null, null, $unknown_product_id, true )
+		);
+		$this->assertFalse( $subscription_service->visitor_can_view_content( Jetpack_Memberships::get_all_newsletter_plan_ids(), $post_access_level ) );
+
+		if ( defined( 'IS_ATOMIC' ) && IS_ATOMIC ) {
 			remove_filter( 'jetpack_is_connection_ready', '__return_true', 1000 );
 		}
 	}

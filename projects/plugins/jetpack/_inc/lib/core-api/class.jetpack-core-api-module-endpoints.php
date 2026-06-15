@@ -406,12 +406,14 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 			}
 
 			$i18n = jetpack_get_module_i18n( $request['slug'] );
-			if ( isset( $module['name'] ) ) {
-				$module['name'] = $i18n['name'];
-			}
-			if ( isset( $module['description'] ) ) {
-				$module['description']       = $i18n['description'];
-				$module['short_description'] = $i18n['description'];
+			if ( $i18n ) {
+				if ( isset( $module['name'] ) ) {
+					$module['name'] = $i18n['name'];
+				}
+				if ( isset( $module['description'] ) ) {
+					$module['description']       = $i18n['description'];
+					$module['short_description'] = $i18n['description'];
+				}
 			}
 			if ( isset( $module['module_tags'] ) ) {
 				$module['module_tags'] = array_map( 'jetpack_get_module_i18n_tag', $module['module_tags'] );
@@ -495,7 +497,7 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 					break;
 
 				default:
-					$default              = isset( $settings[ $setting ]['default'] ) ? $settings[ $setting ]['default'] : false;
+					$default              = $settings[ $setting ]['default'] ?? false;
 					$response[ $setting ] = Jetpack_Core_Json_Api_Endpoints::cast_value( get_option( $setting, $default ), $settings[ $setting ] );
 					break;
 			}
@@ -714,6 +716,11 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 					break;
 
 				case 'monitor_receive_notifications':
+					if ( ! class_exists( 'Jetpack_Monitor' ) ) {
+						$updated = false;
+						break;
+					}
+
 					$monitor = new Jetpack_Monitor();
 
 					// If we got true as response, consider it done.
@@ -721,6 +728,11 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 					break;
 
 				case 'post_by_email_address':
+					if ( ! class_exists( 'Jetpack_Post_By_Email' ) ) {
+						$updated = false;
+						break;
+					}
+
 					$result = Jetpack_Post_By_Email::init()->process_api_request( $value );
 
 					// If we got an email address (create or regenerate) or 1 (delete), consider it done.
@@ -1001,7 +1013,7 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 						break;
 					}
 
-					$allowed_keys   = array( 'invitation', 'comment_follow', 'welcome' );
+					$allowed_keys   = array( 'invitation', 'comment_follow', 'welcome', 'subscribe_modal_heading' );
 					$filtered_value = array_filter(
 						$value,
 						function ( $key ) use ( $allowed_keys ) {
@@ -1034,6 +1046,13 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 						}
 					);
 
+					// Normalize whitespace-only `subscribe_modal_heading` input to empty so
+					// the modal template's `empty()` fallback fires. PHP's `empty()` treats
+					// `"   "` as non-empty, which would otherwise render a blank heading.
+					if ( isset( $filtered_value['subscribe_modal_heading'] ) ) {
+						$filtered_value['subscribe_modal_heading'] = trim( $filtered_value['subscribe_modal_heading'] );
+					}
+
 					$old_subscription_options = get_option( 'subscription_options' );
 					if ( ! is_array( $old_subscription_options ) ) {
 						$old_subscription_options = array();
@@ -1053,12 +1072,14 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 
 				case Jetpack_Newsletter_Category_Helper::NEWSLETTER_CATEGORIES_OPTION:
 					if ( ! is_array( $value ) || empty( $value ) ) {
+						$updated = true;
 						break;
 					}
 
 					// If we are already current, do nothing
 					$current_value = Jetpack_Newsletter_Category_Helper::get_category_ids();
 					if ( $value === $current_value ) {
+						$updated = true;
 						break;
 					}
 
@@ -1078,7 +1099,7 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
 					}
 
 					// If option value was the same as it's current value, or it's default, consider it done.
-					$default = isset( $options[ $option ]['default'] ) ? $options[ $option ]['default'] : false;
+					$default = $options[ $option ]['default'] ?? false;
 					$updated = get_option( $option, $default ) != $value // phpcs:ignore Universal.Operators.StrictComparisons.LooseNotEqual -- ensure we support scalars or strings saved by update_option.
 						? update_option( $option, $value )
 						: true;
@@ -1273,7 +1294,6 @@ class Jetpack_Core_API_Data extends Jetpack_Core_API_XMLRPC_Consumer_Endpoint {
  * phpcs:disable Generic.Files.OneObjectStructurePerFile.MultipleFound
  */
 class Jetpack_Core_API_Module_Data_Endpoint {
-	// phpcs:disable Generic.Files.OneObjectStructurePerFile.MultipleFound
 
 	/**
 	 * Process request and return different data based on the module we are interested in.
@@ -1475,9 +1495,7 @@ class Jetpack_Core_API_Module_Data_Endpoint {
 						'general' => $initial_stats,
 
 						// Build data for 'day' as if it was $wpcom_stats ->get_visits( array( 'unit' => 'day, 'quantity' => 30).
-						'day'     => isset( $initial_stats->visits )
-							? $initial_stats->visits
-							: array(),
+						'day'     => $initial_stats->visits ?? array(),
 					)
 				);
 			case 'week':

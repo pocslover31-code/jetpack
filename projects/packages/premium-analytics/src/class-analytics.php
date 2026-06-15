@@ -7,6 +7,9 @@
 
 namespace Automattic\Jetpack\PremiumAnalytics;
 
+use Automattic\Jetpack\PremiumAnalytics\REST\Api_Proxy_Controller;
+use Automattic\Jetpack\PremiumAnalytics\Sync\Sync_Status_Tracker;
+
 /**
  * Main Analytics class.
  *
@@ -25,22 +28,39 @@ class Analytics {
 	private static $initialized = false;
 
 	/**
+	 * Menu title for the admin page.
+	 *
+	 * @var string
+	 */
+	private static $menu_title = 'Analytics';
+
+	/**
 	 * Initialize the Analytics app.
 	 *
+	 * @param array $options Optional configuration options.
+	 *                       Supported keys:
+	 *                       - menu_title (string): Admin menu label.
 	 * @return void
 	 */
-	public static function init() {
+	public static function init( $options = array() ) {
 		if ( self::$initialized ) {
 			return;
 		}
 
 		self::$initialized = true;
 
+		if ( ! empty( $options['menu_title'] ) ) {
+			self::$menu_title = $options['menu_title'];
+		}
+
 		// Load wp-build output (interceptor, modules, routes, page render).
 		$build_entry = __DIR__ . '/../build/build.php';
 		if ( file_exists( $build_entry ) ) {
 			require_once $build_entry;
 		}
+
+		Sync_Status_Tracker::configure();
+		Api_Proxy_Controller::register();
 
 		add_action( 'admin_menu', array( static::class, 'register_admin_menu' ) );
 		add_action( 'jetpack-premium-analytics_init', array( static::class, 'register_sidebar_items' ) );
@@ -57,8 +77,8 @@ class Analytics {
 	 */
 	public static function register_admin_menu() {
 		add_menu_page(
-			__( 'Analytics', 'jetpack-premium-analytics' ),
-			__( 'Analytics', 'jetpack-premium-analytics' ),
+			esc_html( self::$menu_title ),
+			esc_html( self::$menu_title ),
 			'manage_options',
 			'jetpack-premium-analytics',
 			'__return_null',

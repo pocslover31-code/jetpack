@@ -1,0 +1,120 @@
+import { __ } from '@wordpress/i18n';
+import type { LibraryItem, LibraryItemPrivacy } from '../../types/library';
+import type { Action } from '@wordpress/dataviews';
+
+type Api = {
+	promoteLocal: ( id: string ) => void;
+	retryUpload: ( id: string ) => void;
+	deleteItems: ( ids: string[] ) => void;
+	setPrivacy: ( id: string, privacy: LibraryItemPrivacy ) => void;
+	openVideoDetails: ( id: string ) => void;
+};
+
+// Allowlist on 'idle' (matching TitleText and ThumbnailField) rather than a
+// blocklist of known in-flight statuses, so any future status is excluded
+// from row actions by default instead of silently slipping through.
+const isVideoPressIdle = ( item: LibraryItem ) =>
+	item.type === 'videopress' && item.upload.status === 'idle';
+
+/**
+ * Build the DataViews actions array for the Library tab. Eligibility predicates
+ * gate per-row availability based on `item.type` and `item.upload.status`. The
+ * Delete action sets `supportsBulk: true` and `isEligible` to filter local items
+ * out of mixed selections (DataViews silently skips ineligible items). Rows with
+ * a delete already in flight are ineligible for every action so a slow delete
+ * can't be double-fired or raced by an edit.
+ *
+ * @param api - Hook mutators forwarded into the action callbacks.
+ * @return The actions array for `<DataViews>`.
+ */
+export function buildLibraryActions( api: Api ): Action< LibraryItem >[] {
+	return [
+		{
+			id: 'edit-details',
+			label: __( 'Edit details', 'jetpack-videopress-pkg' ),
+			isPrimary: true,
+			supportsBulk: false,
+			isEligible: isVideoPressIdle,
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.openVideoDetails( item.id );
+				}
+			},
+		},
+		{
+			id: 'set-privacy-public',
+			label: __( 'Make public', 'jetpack-videopress-pkg' ),
+			supportsBulk: false,
+			isEligible: item => isVideoPressIdle( item ) && item.privacy !== 'public',
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.setPrivacy( item.id, 'public' );
+				}
+			},
+		},
+		{
+			id: 'set-privacy-private',
+			label: __( 'Make private', 'jetpack-videopress-pkg' ),
+			supportsBulk: false,
+			isEligible: item => isVideoPressIdle( item ) && item.privacy !== 'private',
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.setPrivacy( item.id, 'private' );
+				}
+			},
+		},
+		{
+			id: 'set-privacy-site',
+			label: __( 'Reset to site default', 'jetpack-videopress-pkg' ),
+			supportsBulk: false,
+			isEligible: item => isVideoPressIdle( item ) && item.privacy !== 'site-default',
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.setPrivacy( item.id, 'site-default' );
+				}
+			},
+		},
+		{
+			id: 'delete',
+			label: __( 'Delete', 'jetpack-videopress-pkg' ),
+			supportsBulk: true,
+			isEligible: isVideoPressIdle,
+			callback: items => {
+				api.deleteItems( items.map( i => i.id ) );
+			},
+		},
+		{
+			id: 'upload-to-vp',
+			label: __( 'Upload to VideoPress', 'jetpack-videopress-pkg' ),
+			isPrimary: true,
+			supportsBulk: false,
+			isEligible: item =>
+				item.type === 'local' &&
+				item.upload.status !== 'uploading' &&
+				item.upload.status !== 'failed',
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.promoteLocal( item.id );
+				}
+			},
+		},
+		{
+			id: 'retry-upload',
+			label: __( 'Retry', 'jetpack-videopress-pkg' ),
+			isPrimary: true,
+			supportsBulk: false,
+			isEligible: item => item.upload.status === 'failed',
+			callback: items => {
+				const [ item ] = items;
+				if ( item ) {
+					api.retryUpload( item.id );
+				}
+			},
+		},
+	];
+}

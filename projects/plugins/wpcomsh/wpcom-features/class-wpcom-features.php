@@ -37,6 +37,10 @@ class WPCOM_Features {
 	private const GAPPS_UNLIMITED                             = 'gapps_unlimited'; // 70
 	private const WP_TITAN_MAIL_MONTHLY                       = 'wp_titan_mail_monthly'; // 400
 	private const WP_TITAN_MAIL_YEARLY                        = 'wp_titan_mail_yearly'; // 401
+	private const WP_TITAN_MAIL_PREMIUM_MONTHLY               = 'wp_titan_mail_premium_monthly'; // 402
+	private const WP_TITAN_MAIL_PREMIUM_YEARLY                = 'wp_titan_mail_premium_yearly'; // 403
+	private const WP_TITAN_MAIL_ULTRA_MONTHLY                 = 'wp_titan_mail_ultra_monthly'; // 404
+	private const WP_TITAN_MAIL_ULTRA_YEARLY                  = 'wp_titan_mail_ultra_yearly'; // 405
 	private const WP_GOOGLE_WORKSPACE_BUSINESS_STARTER_YEARLY = 'wp_google_workspace_business_starter_yearly'; // 690
 	private const WPCOM_SEARCH                                = 'wpcom_search'; // 800
 	private const WPCOM_SEARCH_MONTHLY                        = 'wpcom_search_monthly'; // 801
@@ -248,7 +252,7 @@ class WPCOM_Features {
 	private const WOO_HOSTED_PLANS              = array( self::WOO_HOSTED_BASIC_PLAN_MONTHLY, self::WOO_HOSTED_BASIC_PLAN_YEARLY, self::WOO_HOSTED_PRO_PLAN_MONTHLY, self::WOO_HOSTED_PRO_PLAN_YEARLY );
 	private const GOOGLE_WORKSPACE_PRODUCTS     = array( self::WP_GOOGLE_WORKSPACE_BUSINESS_STARTER_YEARLY );
 	private const GSUITE_PRODUCTS               = array( self::GAPPS, self::GAPPS_UNLIMITED );
-	private const WPCOM_TITAN_MAIL_PRODUCTS     = array( self::WP_TITAN_MAIL_MONTHLY, self::WP_TITAN_MAIL_YEARLY );
+	private const WPCOM_TITAN_MAIL_PRODUCTS     = array( self::WP_TITAN_MAIL_MONTHLY, self::WP_TITAN_MAIL_YEARLY, self::WP_TITAN_MAIL_PREMIUM_MONTHLY, self::WP_TITAN_MAIL_PREMIUM_YEARLY, self::WP_TITAN_MAIL_ULTRA_MONTHLY, self::WP_TITAN_MAIL_ULTRA_YEARLY );
 
 	private const WPCOM_PERSONAL_AND_PREMIUM_PLANS = array( self::WPCOM_PERSONAL_PLANS, self::WPCOM_PREMIUM_PLANS );
 	// Unlock Business-gated features for sites with the flex-cache-site sticker via the free plan.
@@ -385,7 +389,6 @@ class WPCOM_Features {
 	public const BACKUPS_SELF_SERVE                = 'backups-self-serve';
 	public const BACKUP_ONE_TIME                   = 'backup-one-time';
 	public const BIG_SKY                           = 'big-sky';
-	public const BIG_SKY_EXISTING_SITE             = 'big-sky-existing-site';
 	public const BLAZE_CREDITS_VOUCHER             = 'blaze-credits-voucher';
 	public const BLOG_DOMAIN_ONLY                  = 'blog-domain-only';
 	public const CALENDLY                          = 'calendly';
@@ -448,13 +451,16 @@ class WPCOM_Features {
 	public const NO_ADVERTS_NO_ADVERTS_PHP         = 'no-adverts/no-adverts.php';
 	public const NO_WPCOM_BRANDING                 = 'no-wpcom-branding';
 	public const OPENTABLE                         = 'opentable';
-	public const OPTIONS_PERMALINK                 = 'options-permalink';
 	public const PAYMENTS                          = 'payments';
 	public const PAYMENT_BUTTONS                   = 'payment-buttons';
 	public const PAYPAL_PAYMENT_BUTTONS            = 'paypal-payment-buttons';
 	public const PERFORMANCE                       = 'performance';
 	public const PERFORMANCE_HISTORY               = 'performance-history';
+	public const PODCASTING                        = 'podcasting';
 	public const POLLDADDY                         = 'polldaddy';
+	public const POSTS_TO_PODCAST_TIER_1           = 'posts-to-podcast-tier-1';
+	public const POSTS_TO_PODCAST_TIER_2           = 'posts-to-podcast-tier-2';
+	public const POSTS_TO_PODCAST_TIER_3           = 'posts-to-podcast-tier-3';
 	public const PREMIUM_CONTENT_CONTAINER         = 'premium-content/container';
 	public const PERSONAL_THEMES                   = 'personal-themes';
 	public const PREMIUM_THEMES                    = 'premium-themes';
@@ -481,11 +487,10 @@ class WPCOM_Features {
 	public const SIMPLE_PAYMENTS                   = 'simple-payments';
 	public const SITE_PREVIEW_LINKS                = 'site-preview-links';
 	public const SOCIAL_IMAGE_GENERATOR            = 'social-image-generator';
+	public const SOCIAL_MESSAGE_TEMPLATES          = 'social-message-templates';
 	public const SOCIAL_SHARES_1000                = 'social-shares-1000';
 	public const SOCIAL_ENHANCED_PUBLISHING        = 'social-enhanced-publishing';
 	public const SOCIAL_IMAGE_AUTO_CONVERT         = 'social-image-auto-convert';
-	public const SOCIAL_UNIFIED_UI_V1              = 'social-unified-ui-v1';
-	public const SOCIAL_X_CONNECTION               = 'social-x-connection';
 	public const SPACE                             = 'space';
 	public const SPACE_UPGRADED_STORAGE            = 'space-upgraded-storage';
 	public const SSH                               = 'ssh';
@@ -644,16 +649,9 @@ class WPCOM_Features {
 		self::BACKUP_ONE_TIME                   => array(
 			self::JETPACK_BACKUP_ONE_TIME,
 		),
-		// Free trials can upgrade to any plan level.
+		// Plans that grant unlimited Big Sky usage and exit the Big Sky free trial.
 		self::BIG_SKY                           => array(
-			self::WPCOM_PERSONAL_PLANS,
-			self::WPCOM_BUSINESS_PLANS,
-			self::WPCOM_PREMIUM_PLANS,
-			self::WPCOM_ECOMMERCE_PLANS,
-		),
-		// Existing sites can only enable it if they have a business or higher plan.
-		self::BIG_SKY_EXISTING_SITE             => array(
-			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
+			self::WPCOM_PERSONAL_AND_HIGHER_PLANS,
 		),
 		self::BLAZE_CREDITS_VOUCHER             => array(
 			array(
@@ -719,8 +717,15 @@ class WPCOM_Features {
 			self::WPCOM_BUSINESS_PLANS,
 		),
 		self::COPY_SITE                         => array(
-			self::WPCOM_BUSINESS_PLANS,
-			self::WPCOM_ECOMMERCE_PLANS,
+			self::WPCOM_PRO_PLANS,
+			self::EXCLUDE_PLANS => array(
+				self::WPCOM_ECOMMERCE_TRIAL_PLANS,
+			),
+			// Copy a site requires an Atomic site, so this mirrors the plans that can be
+			// Atomic: Personal, Premium, and Business or higher plans (not all paid plans).
+			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
+			self::WPCOM_PERSONAL_AND_PREMIUM_PLANS,
+			self::WPCOM_FLEX_CACHE_SITE_FREE_PLANS,
 		),
 		// CORE_AUDIO - core/audio requires a paid plan for uploading audio files.
 		self::CORE_AUDIO                        => array(
@@ -870,6 +875,7 @@ class WPCOM_Features {
 		),
 		self::GLOBAL_STYLES                     => array(
 			self::WPCOM_PREMIUM_AND_HIGHER_PLANS,
+			self::WPCOM_STARTER_PLANS,
 		),
 		self::GOOGLE_ANALYTICS                  => array(
 			self::JETPACK_PREMIUM_AND_HIGHER,
@@ -1051,12 +1057,6 @@ class WPCOM_Features {
 			self::JETPACK_BUSINESS_PLANS,
 			self::JETPACK_PREMIUM_PLANS,
 		),
-		// OPTIONS_PERMALINK - Atomic only feature. Enables Settings -> Permalinks menu item & options-permalink page.
-		self::OPTIONS_PERMALINK                 => array(
-			self::WPCOM_PRO_PLANS,
-			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
-			self::WPCOM_FLEX_CACHE_SITE_FREE_PLANS,
-		),
 		self::PAYMENTS                          => array(
 			array(
 				'sticker_not_present' => 'gating-business-q1',
@@ -1097,8 +1097,25 @@ class WPCOM_Features {
 			self::JETPACK_BOOST_PLANS,
 			self::JETPACK_COMPLETE_PLANS,
 		),
+		self::PODCASTING                        => array(
+			self::WPCOM_PREMIUM_AND_HIGHER_PLANS,
+			self::JETPACK_ALL_SITES,
+		),
 		self::POLLDADDY                         => array(
 			self::JETPACK_BUSINESS_PLANS,
+		),
+		// POSTS_TO_PODCAST_TIER_{1,2,3} — generates a podcast-style episode
+		// from recent posts. Monthly quotas: TIER_1 = 5, TIER_2 = 10,
+		// TIER_3 = 20. Sites accumulate tiers via the _AND_HIGHER cascades;
+		// the lib's quota helper takes the highest tier present.
+		self::POSTS_TO_PODCAST_TIER_1           => array(
+			self::WPCOM_PERSONAL_AND_HIGHER_PLANS,
+		),
+		self::POSTS_TO_PODCAST_TIER_2           => array(
+			self::WPCOM_PREMIUM_AND_HIGHER_PLANS,
+		),
+		self::POSTS_TO_PODCAST_TIER_3           => array(
+			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
 		),
 		// PREMIUM_CONTENT_CONTAINER - premium-content requires a paid wpcom plan.
 		self::PREMIUM_CONTENT_CONTAINER         => array(
@@ -1351,16 +1368,15 @@ class WPCOM_Features {
 			self::JETPACK_GROWTH_PLANS,
 			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
 		),
-		self::SOCIAL_UNIFIED_UI_V1              => array(
-			self::WPCOM_ALL_SITES,
-			// For Jetpack sites, the feature is controlled in Store_Product_List.
-		),
-		self::SOCIAL_X_CONNECTION               => array(
-			// For now, this is controlled via a blog sticker in Store_Product_List.
-			array(
-				'before' => '2004-12-12',
-				self::WPCOM_ALL_SITES,
-			),
+		self::SOCIAL_MESSAGE_TEMPLATES          => array(
+			// Gated on the paid social plans, matching SOCIAL_ENHANCED_PUBLISHING.
+			self::JETPACK_SOCIAL_ADVANCED_PLANS,
+			self::JETPACK_COMPLETE_PLANS,
+			self::BUNDLE_ENTERPRISE,
+			self::JETPACK_SOCIAL_V1_PLANS,
+			self::JETPACK_SOCIAL_PLANS,
+			self::JETPACK_GROWTH_PLANS,
+			self::WPCOM_BUSINESS_AND_HIGHER_PLANS,
 		),
 		self::SOCIAL_IMAGE_AUTO_CONVERT         => array(
 			self::WPCOM_ALL_SITES,

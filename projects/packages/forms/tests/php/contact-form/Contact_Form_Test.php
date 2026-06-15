@@ -132,6 +132,61 @@ class Contact_Form_Test extends BaseTestCase {
 	}
 
 	/**
+	 * Preview (test) submissions mark the feedback as a test response, skip
+	 * Akismet, and still keep the post_status as 'publish' so the owner can
+	 * find it in the normal inbox alongside real responses.
+	 */
+	public function test_process_submission_marks_preview_submission_as_test_feedback() {
+		$this->add_field_values(
+			array(
+				'name'    => 'Preview Tester',
+				'email'   => 'preview@example.com',
+				'message' => 'This should be stored as test feedback',
+			)
+		);
+
+		// Track whether Akismet filter was invoked — it must not be.
+		$akismet_called = 0;
+		add_filter(
+			'jetpack_contact_form_is_spam',
+			function ( $is_spam ) use ( &$akismet_called ) {
+				++$akismet_called;
+				return $is_spam;
+			},
+			10,
+			1
+		);
+
+		$form = new Contact_Form(
+			array(),
+			"[contact-field label='Name' type='name' required='1'/][contact-field label='Email' type='email' required='1'/][contact-field label='Message' type='textarea' required='1'/]"
+		);
+		$form->set_is_preview_submission( true );
+
+		$initial_count = count( Posts::init()->posts );
+		$result        = $form->process_submission();
+
+		$this->assertTrue( is_string( $result ), 'Form submission should be successful for preview submissions.' );
+
+		$final_posts = Posts::init()->posts;
+		$this->assertCount( $initial_count + 1, $final_posts, 'A feedback post should be created for preview submissions.' );
+
+		$new_post = end( $final_posts );
+		$this->assertEquals( 'feedback', $new_post->post_type, 'The new post should be of type feedback.' );
+		$this->assertEquals( 'publish', $new_post->post_status, 'Test feedback should be stored with publish status, not spam.' );
+
+		$this->assertSame( 0, $akismet_called, 'Akismet filter must not be invoked for preview (test) submissions.' );
+
+		// Round-trip through the Feedback reader to confirm the is_test flag is
+		// serialized into post_content.
+		$feedback = Feedback::get( $new_post->ID );
+		$this->assertInstanceOf( Feedback::class, $feedback );
+		$this->assertTrue( $feedback->is_test(), 'Feedback loaded from post_content should report is_test() === true.' );
+
+		remove_all_filters( 'jetpack_contact_form_is_spam' );
+	}
+
+	/**
 	 * Test that form submissions are stored in database when saveResponses is not specified (defaults to 'yes')
 	 */
 	public function test_process_submission_stores_feedback_when_save_responses_default() {
@@ -2024,7 +2079,7 @@ class Contact_Form_Test extends BaseTestCase {
 
 				// Try to get input from inside label (new markup)
 				// @phan-suppress-next-line PhanUndeclaredMethod -- getElementsByTagName is available on DOMElement, which label elements are.
-				$input = $real_label->getElementsByTagName( 'input' )->item( 0 ); //phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+				$input = $real_label->getElementsByTagName( 'input' )->item( 0 );
 
 				// If input is not inside label, get it from parent (old markup)
 				// In old markup, each <p> has one input and one label, so always use item(0)
@@ -2642,6 +2697,97 @@ class Contact_Form_Test extends BaseTestCase {
 
 		$this->assertEquals( $form->get_field_ids(), $form_copy->get_field_ids(), 'Field IDs should match' );
 		$this->assertNotEmpty( $form_copy->get_field_ids(), 'Fields should not be empty' );
+		Constants::clear_single_constant( 'JETPACK_BLOG_TOKEN' );
+	}
+
+	/**
+	 * A JWT issued while Form_Preview::is_preview_mode() is active carries
+	 * is_test=true inside its serialized source. After decode, the form's
+	 * source should report is_test() === true, which is how
+	 * process_form_submission() recognizes preview submissions.
+	 */
+	public function test_jwt_source_is_flagged_as_test_when_rendered_in_preview_mode() {
+		Constants::set_constant( 'JETPACK_BLOG_TOKEN', 'test.token' );
+
+		// Flip the Form_Preview static flag for the duration of this test so
+		// Feedback_Source::get_current() — invoked by get_jwt() — records the
+		// preview context in the serialized source.
+		$reflection   = new \ReflectionClass( Form_Preview::class );
+		$preview_flag = $reflection->getProperty( 'is_preview_mode' );
+		// PHP 8.1+ makes this a no-op and 8.5+ emits a deprecation notice.
+		if ( PHP_VERSION_ID < 80100 ) {
+			$preview_flag->setAccessible( true );
+		}
+		$previous_value = $preview_flag->getValue();
+		$preview_flag->setValue( null, true );
+
+		try {
+			$form = new Contact_Form(
+				array(
+					'to'      => 'preview@example.com',
+					'subject' => 'preview subject',
+				),
+				"[contact-field label='Name' type='name' required='1'/]"
+			);
+
+			$jwt = $form->get_jwt();
+
+			$decoded = Contact_Form::get_instance_from_jwt( $jwt );
+
+			$this->assertNotNull( $decoded, 'JWT should decode successfully.' );
+			$this->assertTrue(
+				$decoded->get_source()->is_test(),
+				'A JWT issued while preview mode was active should carry is_test=true in its source.'
+			);
+		} finally {
+			$preview_flag->setValue( null, $previous_value );
+			Constants::clear_single_constant( 'JETPACK_BLOG_TOKEN' );
+		}
+	}
+
+	/**
+	 * Backward compatibility: a JWT issued before this feature shipped (or
+	 * issued outside preview mode) has no is_test key in its source. After
+	 * decode, the form's source should report is_test() === false, so the
+	 * submission flows through the normal response pipeline. This matters
+	 * because JWTs can live in cached HTML fragments across page loads.
+	 */
+	public function test_jwt_without_is_test_in_source_is_not_a_preview_submission() {
+		Constants::set_constant( 'JETPACK_BLOG_TOKEN', 'test.token' );
+
+		$form = new Contact_Form(
+			array(
+				'to'      => 'normal@example.com',
+				'subject' => 'normal subject',
+			),
+			"[contact-field label='Name' type='name' required='1'/]"
+		);
+
+		$jwt = $form->get_jwt();
+
+		// Sanity-check the serialized JWT does not carry is_test. We read the
+		// unencrypted outer claims directly — implementation detail, but it
+		// documents the backward-compat contract.
+		$raw_parts       = explode( '.', $jwt );
+		$raw_payload     = $raw_parts[1] ?? '';
+		$decoded_json    = base64_decode( strtr( $raw_payload, '-_', '+/' ), true );
+		$decoded_payload = $decoded_json === false ? null : json_decode( $decoded_json, true );
+		$this->assertIsArray( $decoded_payload );
+		$this->assertArrayHasKey( 'source', $decoded_payload );
+		$this->assertArrayNotHasKey(
+			'is_test',
+			$decoded_payload['source'],
+			'Outside preview mode the source must not include an is_test key so old cached JWTs stay compatible.'
+		);
+
+		$decoded = Contact_Form::get_instance_from_jwt( $jwt );
+
+		$this->assertNotNull( $decoded );
+		$this->assertFalse(
+			$decoded->get_source()->is_test(),
+			'A JWT without is_test in its source must decode to a regular (non-test) submission.'
+		);
+
 		Constants::clear_single_constant( 'JETPACK_BLOG_TOKEN' );
 	}
 
@@ -3908,6 +4054,223 @@ class Contact_Form_Test extends BaseTestCase {
 		$this->assertFalse( \Automattic\Jetpack\Forms\Jetpack_Forms::is_webhooks_enabled() );
 
 		remove_filter( 'jetpack_forms_webhooks_enabled', '__return_false' );
+	}
+
+	/**
+	 * Create a user with the given role and a published post authored by them.
+	 *
+	 * @param string $role Role to assign to the post author.
+	 * @return int The created post ID.
+	 */
+	private function create_post_for_role( $role ) {
+		$author_id = wp_insert_user(
+			array(
+				'user_email' => $role . '-webhook-author@example.com',
+				'user_login' => 'webhook_' . $role . '_author',
+				'user_pass'  => 'abc123',
+				'role'       => $role,
+			)
+		);
+
+		return wp_insert_post(
+			array(
+				'post_title'  => ucfirst( $role ) . ' authored form',
+				'post_status' => 'publish',
+				'post_author' => $author_id,
+			),
+			true
+		);
+	}
+
+	/**
+	 * Build a Contact_Form whose source resolves to the given post id.
+	 *
+	 * @param array $attributes Form attributes.
+	 * @param int   $source_id  Source (post) id the form should report.
+	 * @return Contact_Form
+	 */
+	private function make_form_with_source( $attributes, $source_id ) {
+		$source = Feedback_Source::from_serialized(
+			array(
+				'source_id' => $source_id,
+				'title'     => 'Test Post',
+			)
+		);
+
+		return new class( $attributes, $source ) extends Contact_Form {
+			/**
+			 * Source to report from get_source().
+			 *
+			 * @var Feedback_Source
+			 */
+			private $test_source;
+
+			/**
+			 * Constructor that sets attributes and source directly, skipping parsing.
+			 *
+			 * @param array           $attributes Form attributes.
+			 * @param Feedback_Source $source     Source to report from get_source().
+			 */
+			public function __construct( $attributes, $source ) {
+				$this->attributes  = $attributes;
+				$this->fields      = array();
+				$this->test_source = $source;
+			}
+
+			/**
+			 * Return the test source instead of resolving it from the request.
+			 *
+			 * @return Feedback_Source
+			 */
+			public function get_source() {
+				return $this->test_source;
+			}
+		};
+	}
+
+	/**
+	 * Invoke the private reconcile_content_destinations() method on the plugin singleton.
+	 *
+	 * @param Contact_Form $form Form to reconcile.
+	 */
+	private function invoke_reconcile_content_destinations( $form ) {
+		$method = new \ReflectionMethod( Contact_Form_Plugin::class, 'reconcile_content_destinations' );
+		if ( PHP_VERSION_ID < 80100 ) {
+			$method->setAccessible( true );
+		}
+		$method->invoke( Contact_Form_Plugin::init(), $form );
+	}
+
+	/**
+	 * Test should_honor_content_destinations returns true when the source author can manage options.
+	 */
+	public function test_should_honor_content_destinations_for_capable_author() {
+		$post_id = $this->create_post_for_role( 'administrator' );
+
+		// WorDBless can clear role/option state between tests, so grant the
+		// capability via the user_has_cap filter rather than relying on the role.
+		$grant = function ( $allcaps ) {
+			$allcaps['manage_options'] = true;
+			return $allcaps;
+		};
+		add_filter( 'user_has_cap', $grant );
+
+		$this->assertTrue( \Automattic\Jetpack\Forms\Jetpack_Forms::should_honor_content_destinations( $post_id ) );
+
+		remove_filter( 'user_has_cap', $grant );
+	}
+
+	/**
+	 * Test should_honor_content_destinations denies an author-role author.
+	 */
+	public function test_should_not_honor_content_destinations_for_author_role() {
+		$this->assertFalse(
+			\Automattic\Jetpack\Forms\Jetpack_Forms::should_honor_content_destinations( $this->create_post_for_role( 'author' ) )
+		);
+	}
+
+	/**
+	 * Test should_honor_content_destinations denies a contributor-role author.
+	 */
+	public function test_should_not_honor_content_destinations_for_contributor_role() {
+		$this->assertFalse(
+			\Automattic\Jetpack\Forms\Jetpack_Forms::should_honor_content_destinations( $this->create_post_for_role( 'contributor' ) )
+		);
+	}
+
+	/**
+	 * Test should_honor_content_destinations returns false when the source cannot be resolved.
+	 */
+	public function test_should_honor_content_destinations_returns_false_for_missing_post() {
+		$this->assertFalse( \Automattic\Jetpack\Forms\Jetpack_Forms::should_honor_content_destinations( 0 ) );
+		$this->assertFalse( \Automattic\Jetpack\Forms\Jetpack_Forms::should_honor_content_destinations( 999999 ) );
+	}
+
+	/**
+	 * Test reconcile_content_destinations drops every content-configured destination
+	 * when the source post author may not configure them.
+	 */
+	public function test_reconcile_content_destinations_drops_destinations_for_unauthorized_author() {
+		$form = $this->make_form_with_source(
+			array(
+				'webhooks'       => array(
+					array(
+						'webhook_id' => 'w',
+						'url'        => 'https://example.com/hook',
+						'enabled'    => true,
+						'format'     => 'json',
+						'method'     => 'POST',
+					),
+				),
+				'postToUrl'      => array(
+					'url'     => 'https://example.com/post',
+					'enabled' => true,
+				),
+				'salesforceData' => array( 'organizationId' => '12345' ),
+			),
+			$this->create_post_for_role( 'author' )
+		);
+
+		$this->invoke_reconcile_content_destinations( $form );
+
+		$this->assertSame( array(), $form->attributes['webhooks'], 'Webhooks should be dropped.' );
+		$this->assertSame( array(), $form->attributes['postToUrl'], 'postToUrl should be dropped.' );
+		$this->assertNull( $form->attributes['salesforceData'], 'salesforceData should be dropped.' );
+	}
+
+	/**
+	 * Test reconcile_content_destinations drops a Salesforce-only configuration for an
+	 * unauthorized author, confirming the early return does not skip salesforce-only forms.
+	 */
+	public function test_reconcile_content_destinations_drops_salesforce_only_for_unauthorized_author() {
+		$form = $this->make_form_with_source(
+			array( 'salesforceData' => array( 'organizationId' => '12345' ) ),
+			$this->create_post_for_role( 'author' )
+		);
+
+		$this->invoke_reconcile_content_destinations( $form );
+
+		$this->assertNull( $form->attributes['salesforceData'], 'salesforceData should be dropped for a Salesforce-only form.' );
+	}
+
+	/**
+	 * Test reconcile_content_destinations keeps destinations and migrates postToUrl
+	 * when the source post author may configure them.
+	 */
+	public function test_reconcile_content_destinations_keeps_destinations_for_capable_author() {
+		$form = $this->make_form_with_source(
+			array(
+				'webhooks'       => array(
+					array(
+						'webhook_id' => 'w',
+						'url'        => 'https://example.com/hook',
+						'enabled'    => true,
+						'format'     => 'json',
+						'method'     => 'POST',
+					),
+				),
+				'postToUrl'      => array(
+					'url'     => 'https://example.com/post',
+					'enabled' => true,
+				),
+				'salesforceData' => array( 'organizationId' => '12345' ),
+			),
+			$this->create_post_for_role( 'administrator' )
+		);
+
+		$grant = function ( $allcaps ) {
+			$allcaps['manage_options'] = true;
+			return $allcaps;
+		};
+		add_filter( 'user_has_cap', $grant );
+
+		$this->invoke_reconcile_content_destinations( $form );
+
+		remove_filter( 'user_has_cap', $grant );
+
+		// postToUrl is migrated into the webhooks collection, so both entries survive.
+		$this->assertCount( 2, $form->attributes['webhooks'], 'Configured webhook and migrated postToUrl should remain.' );
+		$this->assertSame( array( 'organizationId' => '12345' ), $form->attributes['salesforceData'], 'salesforceData should be preserved.' );
 	}
 
 	/**

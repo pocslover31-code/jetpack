@@ -1,4 +1,4 @@
-import { expect, test } from '_jetpack-e2e-commons/fixtures/base-test';
+import { expect, test } from '@automattic/_jetpack-e2e-commons/fixtures/base-test';
 import { Onboarding } from '../helpers/onboarding';
 
 test.beforeAll( async ( { testUtils } ) => {
@@ -20,6 +20,6 @@ test( 'Jetpack Social connection', async ( { page, admin, requestUtils } ) => {
 
 	await test.step( 'Verify connection in Jetpack Social page', async () => {
 		await expect( page.getByRole( 'button', { name: 'Connect accounts' } ) ).toBeVisible();
-		await expect( page.getByRole( 'link', { name: 'Write a post' } ) ).toBeVisible();
+		await expect( page.getByRole( 'button', { name: 'Write a post' } ) ).toBeVisible();
 	} );
 } );

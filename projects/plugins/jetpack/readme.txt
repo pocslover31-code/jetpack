@@ -1,10 +1,10 @@
 === Jetpack - WP Security, Backup, Speed, & Growth ===
-Contributors: automattic, adamkheckler, adrianmoldovanwp, aduth, akirk, allendav, alternatekev, andy, annamcphee, annezazu, apeatling, arcangelini, arsihasi, azaozz, barry, batmoo, beaulebens, bindlegirl, biskobe, bjorsch, blobaugh, brbrr, brileyhooper, cainm, cena, cfinke, cgastrell, chaselivingston, chellycat, clickysteve, csonnek, danielbachhuber, daniloercoli, davoraltman, delawski, designsimply, dkmyta, dllh, dlocc, drawmyface, dsmart, dun2mis, dzver, ebinnion, egregor, eliorivero, enej, eoigal, erania-pinnera, ethitter, fgiannar, gcorne, georgestephanis, gibrown, goldsounds, hew, hugobaeta, hypertextranch, iammattthomas, iandunn, joen, jblz, jeffgolenski, jeherve, jenhooks, jenia, jessefriedman, jgs, jkudish, jmdodd, joanrho, johnjamesjacoby, jshreve, kbrownkd, keoshi, koke, kraftbj, lancewillett, leogermani, lhkowalski, lschuyler, macmanx, martinremy, matt, mattwiebe, matveb, maverick3x6, mcsf, mdawaffe, mdbitz, MichaelArestad, migueluy, miguelxavierpenha, mikeyarce, mkaz, nancythanki, nickmomrik, njweller, nunyvega, obenland, oskosk, pento, professor44, rachelsquirrel, rdcoll, renatoagds, retrofox, richardmtl, richardmuscat, robertbpugh, roccotripaldi, ryancowles, samhotchkiss, samiff, scarstocea, scottsweb, sdixon194, sdquirk, sermitr, simison, stephdau, thehenridev, tmoorewp, tyxla, Viper007Bond, westi, williamvianas, wpkaren, yoavf, zinigor
+Contributors: automattic, adamkheckler, adrianmoldovanwp, aduth, akirk, allendav, alternatekev, andy, annamcphee, annezazu, apeatling, arcangelini, arsihasi, azaozz, barry, batmoo, beaulebens, bindlegirl, biskobe, bjorsch, blobaugh, brbrr, brileyhooper, cainm, cena, cfinke, cgastrell, chaselivingston, chellycat, clickysteve, csonnek, danielbachhuber, daniloercoli, davoraltman, delawski, designsimply, dkmyta, dllh, dlocc, drawmyface, dsmart, dun2mis, dzver, ebinnion, egregor, eliorivero, enej, eoigal, erania-pinnera, ethitter, fgiannar, gcorne, georgestephanis, gibrown, goldsounds, hew, hugobaeta, hypertextranch, iammattthomas, iandunn, joen, jblz, jeffgolenski, jeherve, jennywp, jenia, jessefriedman, jgs, jkudish, jmdodd, joanrho, johnjamesjacoby, jshreve, kbrownkd, keoshi, koke, kraftbj, lancewillett, leogermani, lhkowalski, lschuyler, macmanx, martinremy, matt, mattwiebe, matveb, maverick3x6, mcsf, mdawaffe, mdbitz, MichaelArestad, migueluy, miguelxavierpenha, mikeyarce, mkaz, nancythanki, nickmomrik, njweller, nunyvega, obenland, oskosk, pento, professor44, rachelsquirrel, rdcoll, renatoagds, retrofox, richardmtl, richardmuscat, robertbpugh, roccotripaldi, ryanc413, samhotchkiss, samiff, scarstocea, scottsweb, sdixon194, sdquirk, sermitr, simison, stephdau, thehenridev, tmoorewp, tyxla, Viper007Bond, westi, williamvianas, wpkaren, yoavf, zinigor
 Tags: Security, backup, malware, scan, performance
-Stable tag: 15.8-a.3
-Requires at least: 6.8
+Stable tag: 16.0-a.1
+Requires at least: 6.9
 Requires PHP: 7.2
-Tested up to: 6.9
+Tested up to: 7.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -326,15 +326,14 @@ Jetpack Backup can do a full website migration to a new host, migrate theme file
 
 
 == Changelog ==
-### 15.8-a.3 - 2026-04-15
+### 16.0-a.1 - 2026-06-15
 #### Enhancements
-- Forms: Support granular date filter in inbox.
-- Settings: Replace custom tab navigation with @wordpress/ui Tabs component for proper ARIA semantics, built-in overflow handling, and animated indicator.
+- Daily Writing Prompt: Load the Dashboard widget on connected self-hosted Jetpack sites.
+- Subscriptions Block: Customize the Subscribe modal heading site-wide via a new Newsletter setting.
 
 #### Bug fixes
-- Fix taxonomies endpoint returning error when number parameter exceeds 1000.
-- Forms: Fix the Form block not being usable when the Blocks module is inactive.
-- Sync: Increase lock time tolerance in tests.
+- Daily Writing Prompt: Defer the connection-readiness check to Dashboard setup to avoid a fatal error on Atomic sites.
+- Paid Content Block: Prevent lockout after a subscription renewal.
 
 --------
 

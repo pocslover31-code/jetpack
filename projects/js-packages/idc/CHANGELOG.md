@@ -2,6 +2,67 @@
 
 ### This is a list detailing changes for the Jetpack RNA IDC package releases.
 
+## 1.0.75 - 2026-06-15
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.74 - 2026-06-09
+### Changed
+- Update package dependencies. [#49273]
+
+## 1.0.73 - 2026-06-08
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.72 - 2026-06-08
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.71 - 2026-06-03
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.70 - 2026-06-02
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.69 - 2026-06-01
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.68 - 2026-05-25
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.67 - 2026-05-21
+### Changed
+- Update package dependencies. [#48405]
+
+## 1.0.66 - 2026-05-19
+### Changed
+- Internal updates.
+
+## 1.0.65 - 2026-05-14
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.64 - 2026-05-11
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.63 - 2026-05-04
+### Changed
+- Internal: No longer require automattic/jetpack-changelogger as a per-project dev dependency. [#48225]
+- Replace deprecated jetpack-components Spinner with WordPress Core Spinner. [#47451]
+
+## 1.0.62 - 2026-04-27
+### Changed
+- Update dependencies. [#46035]
+
+## 1.0.61 - 2026-04-20
+### Changed
+- Update package dependencies. [#48106]
+
 ## 1.0.60 - 2026-04-15
 ### Changed
 - Update dependencies. [#46035]
