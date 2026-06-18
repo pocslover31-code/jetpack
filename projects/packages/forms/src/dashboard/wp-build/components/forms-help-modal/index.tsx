@@ -11,7 +11,7 @@ import {
 	__experimentalVStack as VStack, // eslint-disable-line @wordpress/no-unsafe-wp-apis
 } from '@wordpress/components';
 import { useDispatch } from '@wordpress/data';
-import { useState, useCallback } from '@wordpress/element';
+import { createInterpolateElement, useState, useCallback } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 /**
  * Internal dependencies
@@ -59,28 +59,29 @@ export default function FormsHelpModal( { isOpen, onClose }: Props ) {
 
 	return (
 		<Modal
-			title={ __( 'Not seeing all your forms?', 'jetpack-forms' ) }
+			title={ __( 'Some forms may not appear here', 'jetpack-forms' ) }
 			onRequestClose={ handleClose }
+			size="medium"
 		>
 			<VStack spacing="4">
 				<Text>
-					{ __( 'The Forms list shows reusable forms, not simple form blocks.', 'jetpack-forms' ) }
+					{ __(
+						'Forms you already added to pages or posts will continue to work. To add them to this list:',
+						'jetpack-forms'
+					) }
 				</Text>
-				<div>
-					<Text as="p" weight="500">
-						{ __( 'To convert a form block to a reusable form:', 'jetpack-forms' ) }
-					</Text>
-					<ol>
-						<li>
-							{ __( 'Open the page or post where your form block is embedded.', 'jetpack-forms' ) }
-						</li>
-						<li>{ __( 'Select the form block.', 'jetpack-forms' ) }</li>
-						<li>
-							{ __( 'Click "Edit Form" in the block toolbar to convert it.', 'jetpack-forms' ) }
-						</li>
-						<li>{ __( 'Save the page or post.', 'jetpack-forms' ) }</li>
-					</ol>
-				</div>
+				<ol style={ { marginTop: 0 } }>
+					<li>{ __( 'Open the page or post', 'jetpack-forms' ) }</li>
+					<li>{ __( 'Select the form', 'jetpack-forms' ) }</li>
+					<li>
+						{ createInterpolateElement(
+							__( 'Click <strong>Edit form</strong> in the toolbar', 'jetpack-forms' ),
+							{ strong: <strong /> }
+						) }
+					</li>
+					<li>{ __( 'Save the page or post', 'jetpack-forms' ) }</li>
+				</ol>
+				<Text>{ __( 'You only need to do this once per form.', 'jetpack-forms' ) }</Text>
 				<HStack justify="space-between" alignment="center">
 					<CheckboxControl
 						__nextHasNoMarginBottom
