@@ -22,7 +22,8 @@ function should_show_jetpack_search_submenu() {
 	}
 
 	// If site is in Offline Mode or not connected yet.
-	if ( ! Jetpack::is_active_and_not_offline_mode() ) {
+	// Some hosts provide a Jetpack class without this helper.
+	if ( method_exists( Jetpack::class, 'is_active_and_not_offline_mode' ) && ! Jetpack::is_active_and_not_offline_mode() ) {
 		return false;
 	}
 

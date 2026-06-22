@@ -12,6 +12,7 @@ use Automattic\Jetpack\Assets;
 use Automattic\Jetpack\Connection\Initial_State as Connection_Initial_State;
 use Automattic\Jetpack\Connection\Manager as Connection_Manager;
 use Automattic\Jetpack\Status;
+use Automattic\Jetpack\Status\Host;
 use Automattic\Jetpack\Tracking;
 /**
  * Responsible for adding a search dashboard to wp-admin.
@@ -47,6 +48,13 @@ class Dashboard {
 	protected $module_control;
 
 	/**
+	 * Host instance.
+	 *
+	 * @var \Automattic\Jetpack\Status\Host
+	 */
+	protected $host;
+
+	/**
 	 * Priority for the dashboard menu
 	 * For Jetpack sites: Akismet uses 4, so we use 1 to ensure both menus are added when only they exist.
 	 * For Simple sites: the value is overriden in a child class with value 100000 to wait for all menus to be registered.
@@ -61,11 +69,13 @@ class Dashboard {
 	 * @param \Automattic\Jetpack\Search\Plan           $plan - Plan instance.
 	 * @param \Automattic\Jetpack\Connection\Manager    $connection_manager - Connection Manager instance.
 	 * @param \Automattic\Jetpack\Search\Module_Control $module_control - Module_Control instance.
+	 * @param \Automattic\Jetpack\Status\Host           $host - Host instance.
 	 */
-	public function __construct( $plan = null, $connection_manager = null, $module_control = null ) {
+	public function __construct( $plan = null, $connection_manager = null, $module_control = null, $host = null ) {
 		$this->plan               = $plan ? $plan : new Plan();
 		$this->connection_manager = $connection_manager ? $connection_manager : new Connection_Manager( Package::SLUG );
 		$this->module_control     = $module_control ? $module_control : new Module_Control( $this->plan );
+		$this->host               = $host ? $host : new Host();
 		$this->plan->init_hooks();
 	}
 
@@ -96,15 +106,28 @@ class Dashboard {
 		$this->remove_search_submenu_if_exists();
 
 		if ( $this->should_add_search_submenu() ) {
-			$page_suffix = Admin_Menu::add_menu(
-				/** "Search" is a product name, do not translate. */
-				'Jetpack Search',
-				'Search',
-				'manage_options',
-				'jetpack-search',
-				array( $this, 'render' ),
-				10
-			);
+			if ( $this->host->is_wpcom_simple() ) {
+				$page_suffix = add_submenu_page(
+					'jetpack',
+					/** "Search" is a product name, do not translate. */
+					'Jetpack Search',
+					'Search',
+					'manage_options',
+					'jetpack-search',
+					array( $this, 'render' ),
+					10
+				);
+			} else {
+				$page_suffix = Admin_Menu::add_menu(
+					/** "Search" is a product name, do not translate. */
+					'Jetpack Search',
+					'Search',
+					'manage_options',
+					'jetpack-search',
+					array( $this, 'render' ),
+					10
+				);
+			}
 		} else {
 			// always add the page, but hide it from the menu.
 			$page_suffix = add_submenu_page(

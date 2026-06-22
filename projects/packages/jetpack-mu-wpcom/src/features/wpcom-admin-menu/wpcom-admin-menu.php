@@ -11,6 +11,7 @@ use Automattic\Jetpack\Connection\Manager as Connection_Manager;
 use Automattic\Jetpack\Newsletter\Settings as Newsletter_Settings;
 use Automattic\Jetpack\Podcast\Admin_Page as Podcast_Admin_Page;
 use Automattic\Jetpack\Redirect;
+use Automattic\Jetpack\Search\Dashboard as Search_Dashboard;
 
 require_once __DIR__ . '/../../common/wpcom-callout.php';
 
@@ -421,6 +422,16 @@ function wpcom_add_jetpack_submenu() {
 	Podcast_Admin_Page::add_wp_admin_submenu();
 
 	if ( $is_simple_site ) {
+		// Jetpack > Search.
+		// Search normally registers through Admin_Menu very early, but on Simple
+		// sites this late menu pass owns the Jetpack submenu shape.
+		if ( class_exists( '\Automattic\Jetpack\Search\Dashboard' ) ) {
+			// @phan-suppress-next-line PhanUndeclaredClassMethod -- class_exists guarded above; provided by sibling autoloader.
+			$search_dashboard = new Search_Dashboard();
+			// @phan-suppress-next-line PhanUndeclaredClassMethod -- class_exists guarded above; provided by sibling autoloader.
+			$search_dashboard->add_wp_admin_submenu();
+		}
+
 		// Jetpack > Newsletter.
 		// Register the in-admin Newsletter settings page (with its own render callback
 		// and admin hooks). This must be done here (at priority 999999) because the
