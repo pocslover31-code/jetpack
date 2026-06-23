@@ -1,3 +1,5 @@
+import { GlobalErrorProvider } from '@jetpack-premium-analytics/data';
+import apiFetch from '@wordpress/api-fetch';
 import { Page } from '@wordpress/admin-ui';
 import { WidgetDashboard, type DashboardWidget } from '@wordpress/widget-dashboard';
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
@@ -26,6 +28,31 @@ const HOST_ROOT_FONT_SIZE: Record< WidgetDashboardStoryHostEnvironment, string |
 	'wordpress-admin': '13px',
 	storybook: undefined,
 };
+
+let didRegisterSettingsMock = false;
+
+/**
+ * Registers a small Storybook-only settings mock for WordPress preferences.
+ */
+function registerSettingsMock() {
+	if ( didRegisterSettingsMock ) {
+		return;
+	}
+
+	didRegisterSettingsMock = true;
+
+	apiFetch.use( ( options, next ) => {
+		const path = typeof options.path === 'string' ? options.path : '';
+
+		if ( path.startsWith( '/wp/v2/settings' ) ) {
+			return Promise.resolve( {} );
+		}
+
+		return next( options );
+	} );
+}
+
+registerSettingsMock();
 
 export interface WidgetDashboardWithWidgetControls {
 	dashboardWidth: string;
@@ -169,22 +196,24 @@ export function WidgetDashboardWithWidget( {
 
 	return (
 		<HostRootFontSize hostEnvironment={ hostEnvironment }>
-			<div style={ { width: dashboardWidth, maxWidth: '100%' } }>
-				<WidgetDashboard
-					layout={ layout }
-					onLayoutChange={ setLayout }
-					widgetTypes={ [ storyWidgetType ] }
-					resolveWidgetModule={ resolveWidgetModule }
-					gridSettings={ { model: 'grid', rowHeight } }
-					editMode={ currentEditMode }
-					onEditChange={ setCurrentEditMode }
-				>
-					<Page title={ pageTitle } actions={ <WidgetDashboard.Actions /> } hasPadding>
-						<WidgetDashboard.NoWidgetsState />
-						<WidgetDashboard.Widgets />
-					</Page>
-				</WidgetDashboard>
-			</div>
+			<GlobalErrorProvider>
+				<div style={ { width: dashboardWidth, maxWidth: '100%' } }>
+					<WidgetDashboard
+						layout={ layout }
+						onLayoutChange={ setLayout }
+						widgetTypes={ [ storyWidgetType ] }
+						resolveWidgetModule={ resolveWidgetModule }
+						gridSettings={ { model: 'grid', rowHeight } }
+						editMode={ currentEditMode }
+						onEditChange={ setCurrentEditMode }
+					>
+						<Page title={ pageTitle } actions={ <WidgetDashboard.Actions /> } hasPadding>
+							<WidgetDashboard.NoWidgetsState />
+							<WidgetDashboard.Widgets />
+						</Page>
+					</WidgetDashboard>
+				</div>
+			</GlobalErrorProvider>
 		</HostRootFontSize>
 	);
 }
