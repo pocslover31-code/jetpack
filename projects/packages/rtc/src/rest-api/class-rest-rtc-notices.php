@@ -139,7 +139,73 @@ class REST_RTC_Notices extends WP_REST_Controller {
 		// Expire after 2 minutes.
 		set_transient( $key, $requests, 2 * MINUTE_IN_SECONDS );
 
+		// Fire rate-limited action so listeners (bell, email, etc.)
+		// can notify the plan owner.
+		self::maybe_fire_collaborator_blocked( $post_id, $user );
+
 		return rest_ensure_response( array( 'success' => true ) );
+	}
+
+	/**
+	 * Fire the jetpack_rtc_collaborator_blocked action if not throttled.
+	 *
+	 * Rate-limited to once per day per blog. Listeners hook into the
+	 * action to send notifications (bell, email, etc.).
+	 *
+	 * @param int      $post_id The post the user was trying to join.
+	 * @param \WP_User $user    The blocked user.
+	 */
+	public static function maybe_fire_collaborator_blocked( $post_id, $user ) {
+		// Only fire when limit notices are enabled.
+		if ( ! apply_filters( 'jetpack_rtc_enable_limit_notices', false ) ) {
+			return;
+		}
+
+		// Check rate limit — once per day per blog.
+		if ( wpcom_get_blog_transient( 'rtc_collaborator_blocked_fired' ) ) {
+			return;
+		}
+
+		$owner_id = \Automattic\Jetpack\RTC::get_plan_owner_id();
+		if ( ! $owner_id ) {
+			return;
+		}
+
+		// Set the throttle *before* firing so concurrent requests don't
+		// race past the check.
+		wpcom_set_blog_transient( 'rtc_collaborator_blocked_fired', 1, DAY_IN_SECONDS );
+
+		/**
+		 * Fires when a non-admin user is blocked by the collaborator limit.
+		 *
+		 * Rate-limited to once per day per blog. Hook into this action
+		 * to add notification strategies (bell, email, Slack, etc.).
+		 *
+		 * @param int      $post_id  The post the user was trying to join.
+		 * @param \WP_User $user     The blocked user.
+		 * @param int      $owner_id The plan owner's user ID.
+		 */
+		do_action( 'jetpack_rtc_collaborator_blocked', $post_id, $user, $owner_id );
+	}
+
+	/**
+	 * Bell notification listener for the collaborator blocked action.
+	 *
+	 * @param int      $post_id  The post the user was trying to join.
+	 * @param \WP_User $user     The blocked user.
+	 * @param int      $owner_id The plan owner's user ID.
+	 */
+	public static function on_collaborator_blocked( $post_id, $user, $owner_id ) {
+		wpcom_send_bell_notification(
+			$owner_id,
+			'rtc_collaborator_blocked',
+			array(
+				'blog_id' => get_current_blog_id(),
+				'post_id' => $post_id,
+				'user_id' => $user->ID,
+			),
+			sprintf( 'rtc-blocked-%d-%d-%d', get_current_blog_id(), $post_id, $user->ID )
+		);
 	}
 
 	/**

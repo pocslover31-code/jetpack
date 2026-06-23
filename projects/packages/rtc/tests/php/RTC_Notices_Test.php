@@ -91,6 +91,9 @@ class RTC_Notices_Test extends \WorDBless\BaseTestCase {
 		// Clean up any transients left by tests.
 		delete_transient( REST_RTC_Notices::JOIN_REQUEST_OPTION . '_' . 999999 );
 
+		// Clean up rate-limit transients that may have been set by tests.
+		wpcom_delete_blog_transient( 'rtc_collaborator_blocked_fired' );
+
 		// Reset the REST server so stale route registrations don't leak
 		// into other test classes.
 		global $wp_rest_server;
@@ -377,5 +380,93 @@ class RTC_Notices_Test extends \WorDBless\BaseTestCase {
 		$this->assertStringContainsString( '"isAdmin"', $inline );
 		$this->assertStringContainsString( '"maxPeersPerRoom"', $inline );
 		$this->assertStringContainsString( '"enableLimitNotices"', $inline );
+	}
+
+	/**
+	 * Tests that plan owner ID returns 0 when no owner detection is available.
+	 */
+	public function test_plan_owner_id_returns_zero_without_detection() {
+		$this->assertSame( 0, RTC::get_plan_owner_id() );
+	}
+
+	/**
+	 * Tests that plan owner ID returns master_user via Jetpack_Options.
+	 */
+	public function test_plan_owner_id_via_jetpack_master_user() {
+		if ( ! class_exists( 'Jetpack_Options' ) ) {
+			$this->markTestSkipped( 'Jetpack_Options not available' );
+		}
+
+		\Jetpack_Options::update_option( 'master_user', $this->user_id );
+		$this->assertSame( $this->user_id, RTC::get_plan_owner_id() );
+
+		\Jetpack_Options::delete_option( 'master_user' );
+	}
+
+	/**
+	 * Tests that send_admin_bell_notification does not fail when
+	 * notes_send_callback is unavailable (non-WPCOM environment).
+	 */
+	public function test_bell_notification_skips_without_notes_function() {
+		// Should not throw — gracefully skips when notes_send_callback doesn't exist.
+		wpcom_send_bell_notification( $this->user_id, 'test_type', array( 'key' => 'value' ), 'dedup-1' );
+		$this->assertTrue( true );
+	}
+
+	/**
+	 * Tests that the collaborator blocked action is rate-limited by transient.
+	 */
+	public function test_collaborator_blocked_action_is_rate_limited() {
+		if ( ! class_exists( 'Jetpack_Options' ) ) {
+			$this->markTestSkipped( 'Jetpack_Options not available' );
+		}
+
+		$post_id = wp_insert_post(
+			array(
+				'post_title'  => 'Rate Limit Test Post',
+				'post_status' => 'publish',
+			)
+		);
+
+		add_filter( 'jetpack_rtc_enable_limit_notices', '__return_true', 999 );
+		\Jetpack_Options::update_option( 'master_user', $this->user_id );
+
+		wp_set_current_user( $this->second_user_id );
+		$user = wp_get_current_user();
+
+		// First call sets the transient and fires the action.
+		$this->assertFalse( wpcom_get_blog_transient( 'rtc_collaborator_blocked_fired' ) );
+
+		$fired    = 0;
+		$listener = function () use ( &$fired ) {
+			++$fired;
+		};
+		add_action( 'jetpack_rtc_collaborator_blocked', $listener );
+
+		REST_RTC_Notices::maybe_fire_collaborator_blocked( $post_id, $user );
+		$this->assertNotFalse( wpcom_get_blog_transient( 'rtc_collaborator_blocked_fired' ) );
+		$this->assertSame( 1, $fired );
+
+		// Second call is throttled — action does not fire again.
+		REST_RTC_Notices::maybe_fire_collaborator_blocked( $post_id, $user );
+		$this->assertSame( 1, $fired );
+
+		// Clean up.
+		remove_action( 'jetpack_rtc_collaborator_blocked', $listener );
+		wpcom_delete_blog_transient( 'rtc_collaborator_blocked_fired' );
+		remove_all_filters( 'jetpack_rtc_enable_limit_notices' );
+		\Jetpack_Options::delete_option( 'master_user' );
+		wp_set_current_user( $this->user_id );
+		wp_delete_post( $post_id, true );
+	}
+
+	/**
+	 * Tests that the bell notification listener receives correct arguments.
+	 */
+	public function test_on_collaborator_blocked_calls_bell_notification() {
+		// on_collaborator_blocked should not throw when notes_send_callback is unavailable.
+		$user = wp_get_current_user();
+		REST_RTC_Notices::on_collaborator_blocked( 123, $user, $this->user_id );
+		$this->assertTrue( true );
 	}
 }

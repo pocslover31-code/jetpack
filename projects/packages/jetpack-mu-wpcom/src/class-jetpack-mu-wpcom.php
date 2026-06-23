@@ -31,6 +31,7 @@ class Jetpack_Mu_Wpcom {
 		require_once self::PKG_DIR . 'src/common/index.php'; // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.NotAbsolutePath
 		require_once __DIR__ . '/common/fatal-error-signature.php';
 		require_once __DIR__ . '/utils.php';
+		require_once __DIR__ . '/lib/load.php';
 
 		// PCG confirmation probe wires its `pre_option_active_plugins`
 		// filter at mu-plugin time, before WP loads active plugins.
