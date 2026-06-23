@@ -1,0 +1,4 @@
+Significance: minor
+Type: added
+
+Send bell and email notifications to the plan owner when a non-admin is blocked by the collaborator limit
