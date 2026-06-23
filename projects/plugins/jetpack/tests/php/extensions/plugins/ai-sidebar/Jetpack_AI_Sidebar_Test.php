@@ -637,7 +637,14 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 				'sectionName'    => 'gutenberg',
 				'agentProviders' => array(
 					'https://example.com/wp-content/plugins/big-sky-plugin/build/calypso-agent-provider/index.js?ver=123',
-					'https://widgets.wp.com/agents-manager/jetpack-ai-sidebar.provider.mjs',
+					array(
+						'providerId' => 'jetpack-ai-sidebar',
+						'url'        => 'https://widgets.wp.com/agents-manager/jetpack-ai-sidebar.provider.mjs',
+					),
+					array(
+						'providerId' => 'big-sky',
+						'url'        => 'https://example.com/wp-content/plugins/big-sky-plugin/build/calypso-agent-provider/index.js?ver=456',
+					),
 					array( 'provider' => 'metadata' ),
 				),
 			)
@@ -645,7 +652,10 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 
 		$this->assertSame(
 			array(
-				'https://widgets.wp.com/agents-manager/jetpack-ai-sidebar.provider.mjs',
+				array(
+					'providerId' => 'jetpack-ai-sidebar',
+					'url'        => 'https://widgets.wp.com/agents-manager/jetpack-ai-sidebar.provider.mjs',
+				),
 				array( 'provider' => 'metadata' ),
 			),
 			$data['agentProviders']
@@ -999,7 +1009,8 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$providers = Jetpack_AI_Sidebar::register_provider( array() );
 
 		$this->assertCount( 1, $providers );
-		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[0] );
+		$this->assertSame( 'jetpack-ai-sidebar', $providers[0]['providerId'] );
+		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[0]['url'] );
 		// Asset enqueueing is handled by maybe_enqueue_abilities_script, not register_provider.
 		$this->assertFalse( wp_script_is( 'jetpack-ai-provider', 'enqueued' ) );
 		$this->assertFalse( wp_style_is( 'jetpack-ai-provider', 'enqueued' ) );
@@ -1041,7 +1052,8 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$this->assertCount( 3, $providers );
 		$this->assertSame( 'https://example.com/provider-a.mjs', $providers[0] );
 		$this->assertSame( 'https://example.com/provider-b.mjs', $providers[1] );
-		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[2] );
+		$this->assertSame( 'jetpack-ai-sidebar', $providers[2]['providerId'] );
+		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[2]['url'] );
 	}
 
 	/**
@@ -1136,7 +1148,8 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$providers = apply_filters( 'agents_manager_agent_providers', array() );
 
 		$this->assertCount( 1, $providers );
-		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[0] );
+		$this->assertSame( 'jetpack-ai-sidebar', $providers[0]['providerId'] );
+		$this->assertStringContainsString( 'jetpack-ai-sidebar.provider.mjs', $providers[0]['url'] );
 	}
 
 	/**
