@@ -96,15 +96,6 @@ class Jetpack_AI_Sidebar {
 			return;
 		}
 
-		// Big Sky has its own chat UI — don't load AM separately.
-		// When Big Sky enables AM via unified-big-sky flag, AM is loaded
-		// by jetpack-mu-wpcom and caught by the wp_script_is check below.
-		// Check both class existence AND the enable option — the class is
-		// declared unconditionally when the plugin is present.
-		if ( class_exists( 'Big_Sky' ) && get_option( 'big_sky_enable', '1' ) ) {
-			return;
-		}
-
 		// CIAB (next-admin) has AM natively via jetpack-mu-wpcom — skip CDN load.
 		if ( did_action( 'next_admin_init' ) ) {
 			return;
@@ -128,7 +119,14 @@ class Jetpack_AI_Sidebar {
 	 * @return void
 	 */
 	public static function maybe_enqueue_abilities_script(): void {
-		if ( ! self::is_jetpack_ai_sidebar_preview_enabled() || ! self::is_post_editor() || ! self::has_ai_features() ) {
+		if ( ! self::is_jetpack_ai_sidebar_preview_enabled() || ! self::has_ai_features() ) {
+			return;
+		}
+
+		// Post editor is the default surface. When Big Sky is the AM host it also
+		// needs the IIFE in the site editor so window.__JetpackAIProvider exists
+		// when Big Sky's composer probes it after dynamic-importing the wrapper.
+		if ( ! self::is_post_editor() && ! ( self::is_big_sky_active() && self::is_block_editor() ) ) {
 			return;
 		}
 
@@ -274,7 +272,8 @@ class Jetpack_AI_Sidebar {
 
 		// Direct CDN-loader fallback. Jetpack owns these defaults; hosts can
 		// override via the AI Editorial Review and preview filters.
-		$am_data['agentId']                  = AI_SIDEBAR_AGENT_ID;
+		$filtered_agent_id                   = apply_filters( 'agents_manager_agent_id', null );
+		$am_data['agentId']                  = $filtered_agent_id ? $filtered_agent_id : AI_SIDEBAR_AGENT_ID;
 		$am_data['aiEditorialReviewEnabled'] = self::is_ai_editorial_review_enabled();
 		$am_data['jetpackAiSidebarPreview']  = self::get_jetpack_ai_sidebar_preview_config();
 		return $am_data;
@@ -402,6 +401,12 @@ class Jetpack_AI_Sidebar {
 	 * @return array Updated providers.
 	 */
 	public static function register_provider( array $providers ): array {
+		// Big Sky's calypso-agent-provider composes Jetpack's provider in-process
+		// via dynamic import; adding the URL here would cause AM to load it twice.
+		if ( self::is_big_sky_active() ) {
+			return $providers;
+		}
+
 		// CIAB (next-admin) has AM natively — skip to avoid duplicate agents.
 		if ( did_action( 'next_admin_init' ) ) {
 			return $providers;
@@ -603,6 +608,13 @@ class Jetpack_AI_Sidebar {
 	 * @return array Filtered provider URLs.
 	 */
 	private static function filter_agent_providers_for_jetpack_ai_sidebar( array $providers ): array {
+		// With Big Sky as the AM host, Big Sky's calypso-agent-provider owns the
+		// provider list and composes Jetpack's provider in-process. Stripping the
+		// Big Sky URL here would break that composition.
+		if ( self::is_big_sky_active() ) {
+			return $providers;
+		}
+
 		return array_values(
 			array_filter(
 				$providers,
@@ -647,6 +659,12 @@ class Jetpack_AI_Sidebar {
 	 */
 	public static function maybe_patch_jetpack_ai_sidebar_preview_data(): void {
 		if ( ( new Host() )->is_wpcom_simple() ) {
+			return;
+		}
+		// When Big Sky is the AM host, its calypso-agent-provider owns the
+		// provider list — Jetpack must not stamp a strip-then-replace script
+		// over the upstream agentsManagerData payload.
+		if ( self::is_big_sky_active() ) {
 			return;
 		}
 		if ( ! self::is_jetpack_ai_sidebar_preview_enabled() || ! self::is_post_editor() || ! self::has_ai_features() ) {
@@ -716,6 +734,29 @@ class Jetpack_AI_Sidebar {
 		return $screen instanceof \WP_Screen
 			&& 'post' === $screen->base
 			&& 'post' === $screen->post_type;
+	}
+
+	/**
+	 * Whether the Big Sky integration is active on this site.
+	 *
+	 * Returns true when the Big_Sky plugin class is loaded AND the
+	 * `jetpack_ai_sidebar_big_sky_integration` filter is truthy (defaults true).
+	 *
+	 * Deliberately does not read `big_sky_enable`: that option is a Big-Sky-internal
+	 * setting whose contract is owned by another plugin (registered with `intval`
+	 * sanitisation in `big-sky.php`), may be `null` on fresh installs, and signals
+	 * "user disabled Big Sky's AI features" — not "Jetpack should skip coordination".
+	 * Centralising on `class_exists()` plus a Jetpack-side filter gives one explicit
+	 * kill switch with clear ownership.
+	 *
+	 * Rollback model: code-side only (no DB option). A hotfix
+	 * `add_filter('jetpack_ai_sidebar_big_sky_integration', '__return_false')` disables.
+	 *
+	 * @return bool True when integration coordination should activate.
+	 */
+	public static function is_big_sky_active(): bool {
+		return class_exists( 'Big_Sky' )
+			&& (bool) apply_filters( 'jetpack_ai_sidebar_big_sky_integration', true );
 	}
 
 	/**

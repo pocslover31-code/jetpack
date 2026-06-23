@@ -67,6 +67,12 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		// Ensure Big Sky is disabled by default so tests aren't affected by the
 		// Big_Sky class persisting across tests once it is declared.
 		update_option( 'big_sky_enable', '0' );
+		// Suppress the Big Sky integration by default — the `Big_Sky` stub class
+		// declared by `simulate_big_sky_class()` persists across tests in the
+		// same process, so `is_big_sky_active()` would otherwise leak true into
+		// every subsequent test. Tests that need the integration active call
+		// `simulate_big_sky_class()`, which removes this filter.
+		add_filter( 'jetpack_ai_sidebar_big_sky_integration', '__return_false' );
 	}
 
 	/**
@@ -103,6 +109,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		remove_all_filters( 'jetpack_ai_sidebar_preview_enabled' );
 		remove_all_filters( 'jetpack_ai_sidebar_preview_features' );
 		remove_all_filters( 'jetpack_ai_sidebar_agents_manager_data' );
+		remove_all_filters( 'jetpack_ai_sidebar_big_sky_integration' );
 		remove_action( 'admin_enqueue_scripts', array( Jetpack_AI_Sidebar::class, 'maybe_enqueue_am' ), 200 );
 		remove_action( 'admin_enqueue_scripts', array( Jetpack_AI_Sidebar::class, 'maybe_enqueue_abilities_script' ), 201 );
 		remove_action( 'admin_enqueue_scripts', array( Jetpack_AI_Sidebar::class, 'maybe_patch_jetpack_ai_sidebar_preview_data' ), 250 );
@@ -148,6 +155,15 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Set the current screen to the site editor.
+	 */
+	private function set_site_editor_screen() {
+		set_current_screen( 'site-editor' );
+		$screen                  = get_current_screen();
+		$screen->is_block_editor = true;
+	}
+
+	/**
 	 * Enable the AI sidebar feature via filter.
 	 */
 	private function enable_sidebar() {
@@ -156,11 +172,19 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 
 	/**
 	 * Simulate the Big_Sky class existing.
+	 *
+	 * NOTE: the first invocation `eval`s a stub `Big_Sky` class which persists in
+	 * the class table for the remainder of the PHP process. Any later test that
+	 * needs `class_exists( 'Big_Sky' )` to be false must run in a separate
+	 * process (see `@runInSeparateProcess` on `test_is_big_sky_active_returns_false_when_class_missing`).
 	 */
 	private function simulate_big_sky_class() {
 		if ( ! class_exists( 'Big_Sky' ) ) {
 			eval( 'class Big_Sky {}' ); // @codingStandardsIgnoreLine — minimal stub for unit test isolation.
 		}
+		// Undo the default kill-switch installed by set_up() so this test sees
+		// is_big_sky_active() === true.
+		remove_filter( 'jetpack_ai_sidebar_big_sky_integration', '__return_false' );
 	}
 
 	/**
@@ -463,6 +487,53 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		Jetpack_AI_Sidebar::maybe_enqueue_am();
 
 		$this->assertTrue( wp_script_is( 'agents-manager', 'enqueued' ) );
+	}
+
+	/**
+	 * AM is enqueued when Big Sky is active.
+	 *
+	 * `maybe_enqueue_am` used to early-return when Big Sky was present,
+	 * because jetpack-mu-wpcom enqueued AM in that case. Agents Manager
+	 * is no longer an mu-wpcom plugin, so nothing took over and Big Sky's
+	 * unified chat ended up with no AM at all. `wp_script_is()` further
+	 * down already handles dedup if another loader has enqueued AM, so
+	 * the Big-Sky branch was removed.
+	 */
+	public function test_maybe_enqueue_am_enqueues_when_big_sky_is_active() {
+		$this->simulate_big_sky_class();
+		update_option( 'big_sky_enable', '1' );
+		$this->set_block_editor_screen();
+		$this->cache_am_asset_data();
+
+		Jetpack_AI_Sidebar::maybe_enqueue_am();
+
+		$this->assertTrue( wp_script_is( 'agents-manager', 'enqueued' ) );
+	}
+
+	/**
+	 * AgentId honours the `agents_manager_agent_id` filter when a host overrides it.
+	 *
+	 * Hosts like Big Sky select a non-default agent (e.g. Dolly) via this
+	 * shared filter. Jetpack must defer to the filtered value before falling
+	 * back to its own default; otherwise hosts get silently overridden.
+	 */
+	public function test_get_agents_manager_data_respects_agent_id_filter() {
+		$this->set_block_editor_screen();
+		$this->cache_am_asset_data();
+		add_filter(
+			'agents_manager_agent_id',
+			function () {
+				return 'dolly';
+			}
+		);
+
+		Jetpack_AI_Sidebar::maybe_enqueue_am();
+
+		$this->assertStringContainsString(
+			'"agentId":"dolly"',
+			$this->get_agents_manager_inline_script(),
+			'Filter-set agentId should win over the Jetpack default.'
+		);
 	}
 
 	/**
@@ -985,6 +1056,40 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$this->assertFalse( wp_script_is( 'jetpack-ai-provider', 'enqueued' ) );
 	}
 
+	/**
+	 * The abilities IIFE is enqueued in the site editor when Big Sky is active.
+	 *
+	 * The IIFE populates window.__JetpackAIProvider, which Big Sky's composer
+	 * probes after dynamic-importing the ESM wrapper.
+	 */
+	public function test_abilities_script_enqueued_in_site_editor_when_big_sky_active() {
+		$this->simulate_big_sky_class();
+		$this->set_site_editor_screen();
+		$this->cache_sidebar_asset_data();
+
+		Jetpack_AI_Sidebar::maybe_enqueue_abilities_script();
+
+		$this->assertTrue(
+			wp_script_is( 'jetpack-ai-provider', 'enqueued' ),
+			'Abilities IIFE script must be enqueued in site editor when Big Sky is active.'
+		);
+	}
+
+	/**
+	 * The abilities IIFE is still skipped in the site editor when Big Sky is not active.
+	 */
+	public function test_abilities_script_skips_site_editor_without_big_sky() {
+		$this->set_site_editor_screen();
+		$this->cache_sidebar_asset_data();
+
+		Jetpack_AI_Sidebar::maybe_enqueue_abilities_script();
+
+		$this->assertFalse(
+			wp_script_is( 'jetpack-ai-provider', 'enqueued' ),
+			'Site editor enqueue must remain off without the Big Sky integration.'
+		);
+	}
+
 	// ──────────────────────────────────────────────────
 	// register_provider() tests
 	// ──────────────────────────────────────────────────
@@ -1071,6 +1176,85 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$this->assertSame( $existing, $providers );
 	}
 
+	/**
+	 * The agent-providers strip filter preserves Big Sky's URL when Big Sky is active.
+	 *
+	 * Exercised through the public `add_agents_manager_data` entry point because the
+	 * underlying `filter_agent_providers_for_jetpack_ai_sidebar` method is private.
+	 */
+	public function test_strip_filter_preserves_big_sky_when_active() {
+		$this->simulate_big_sky_class();
+		$this->set_block_editor_screen();
+
+		$big_sky_url = 'https://example.com/wp-content/plugins/big-sky-plugin/build/calypso-agent-provider/index.js?ver=123';
+		$data        = Jetpack_AI_Sidebar::add_agents_manager_data(
+			array(
+				'sectionName'    => 'gutenberg',
+				'agentProviders' => array( $big_sky_url ),
+			)
+		);
+
+		$this->assertContains(
+			$big_sky_url,
+			$data['agentProviders'],
+			'Big Sky URL should not be stripped when the Big Sky integration is active.'
+		);
+	}
+
+	/**
+	 * The preview-data patch script is suppressed when Big Sky is active.
+	 *
+	 * With Big Sky as the AM host, Big Sky's calypso-agent-provider owns the
+	 * provider list — Jetpack must not stamp its strip-then-replace script over it.
+	 */
+	public function test_patch_jetpack_ai_sidebar_preview_data_skips_when_big_sky_active() {
+		$this->simulate_big_sky_class();
+		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
+		wp_enqueue_script( 'agents-manager', 'https://example.com/am.js', array(), '1.0', true );
+		wp_add_inline_script( 'agents-manager', 'const agentsManagerData = { sectionName: "gutenberg" };', 'before' );
+
+		Jetpack_AI_Sidebar::maybe_patch_jetpack_ai_sidebar_preview_data();
+
+		$this->assertStringNotContainsString(
+			'agentsManagerData.agentId',
+			$this->get_agents_manager_inline_script()
+		);
+		$this->assertStringNotContainsString(
+			'agentsManagerData.aiEditorialReviewEnabled',
+			$this->get_agents_manager_inline_script()
+		);
+		$this->assertStringNotContainsString(
+			'agentsManagerData.jetpackAiSidebarPreview',
+			$this->get_agents_manager_inline_script()
+		);
+	}
+
+	/**
+	 * The register_provider method does not add Jetpack's URL when Big Sky is active.
+	 */
+	public function test_register_provider_skips_when_big_sky_active() {
+		$this->simulate_big_sky_class();
+		$this->set_block_editor_screen();
+		$this->cache_sidebar_asset_data();
+
+		$providers = array();
+		$providers = Jetpack_AI_Sidebar::register_provider( $providers );
+
+		$jetpack_url_present = false;
+		foreach ( $providers as $entry ) {
+			$url = is_array( $entry ) ? ( $entry['url'] ?? '' ) : (string) $entry;
+			if ( str_contains( $url, 'jetpack-ai-sidebar.provider' ) ) {
+				$jetpack_url_present = true;
+				break;
+			}
+		}
+		$this->assertFalse(
+			$jetpack_url_present,
+			'Jetpack provider URL should not be registered when Big Sky is active.'
+		);
+	}
+
 	// ──────────────────────────────────────────────────
 	// Asset data tests
 	// ──────────────────────────────────────────────────
@@ -1149,5 +1333,42 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$providers = apply_filters( 'agents_manager_agent_providers', array() );
 
 		$this->assertCount( 0, $providers );
+	}
+
+	// ──────────────────────────────────────────────────
+	// is_big_sky_active() tests
+	// ──────────────────────────────────────────────────
+
+	/**
+	 * The is_big_sky_active() helper returns false when Big_Sky class is not defined.
+	 *
+	 * Runs in a separate process so the `Big_Sky` stub declared by
+	 * `simulate_big_sky_class()` in earlier tests is not present.
+	 *
+	 * @runInSeparateProcess
+	 * @preserveGlobalState disabled
+	 */
+	#[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+	#[\PHPUnit\Framework\Attributes\PreserveGlobalState( false )]
+	public function test_is_big_sky_active_returns_false_when_class_missing() {
+		$this->assertFalse( Jetpack_AI_Sidebar::is_big_sky_active() );
+	}
+
+	/**
+	 * The is_big_sky_active() helper returns true when Big_Sky class exists and filter is enabled.
+	 */
+	public function test_is_big_sky_active_returns_true_when_class_exists() {
+		$this->simulate_big_sky_class();
+		$this->assertTrue( Jetpack_AI_Sidebar::is_big_sky_active() );
+	}
+
+	/**
+	 * Filter `jetpack_ai_sidebar_big_sky_integration` can disable the integration.
+	 */
+	public function test_is_big_sky_active_respects_filter() {
+		$this->simulate_big_sky_class();
+		add_filter( 'jetpack_ai_sidebar_big_sky_integration', '__return_false' );
+		$this->assertFalse( Jetpack_AI_Sidebar::is_big_sky_active() );
+		remove_filter( 'jetpack_ai_sidebar_big_sky_integration', '__return_false' );
 	}
 }
