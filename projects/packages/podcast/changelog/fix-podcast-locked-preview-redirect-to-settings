@@ -1,0 +1,4 @@
+Significance: patch
+Type: fixed
+
+Podcast: Fix post-upgrade redirect from locked Stats or Episodes preview to land on the Settings tab instead of the originating locked page.
