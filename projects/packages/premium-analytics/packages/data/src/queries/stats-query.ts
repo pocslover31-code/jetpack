@@ -1,15 +1,19 @@
 import { fetchStatsProxy, type StatsProxyMethod, type StatsProxyVersion } from '../api';
 import {
 	sanitizeStatsClicksResponse,
+	sanitizeStatsEmailBreakdownResponse,
+	sanitizeStatsEmailSummaryResponse,
 	sanitizeStatsFileDownloadsResponse,
 	sanitizeStatsLocationsResponse,
 	sanitizeStatsPassthroughResponse,
 	sanitizeStatsReferrersResponse,
 	sanitizeStatsSearchTermsResponse,
 	sanitizeStatsSiteResponse,
+	sanitizeStatsTimeSeriesResponse,
 	sanitizeStatsTopAuthorsResponse,
 	sanitizeStatsTopPostsResponse,
 	sanitizeStatsVideoPlaysResponse,
+	sanitizeStatsVisitsResponse,
 } from '../processing/stats';
 import {
 	reportParamsToStatsQueryParams,
@@ -33,6 +37,10 @@ const statsSanitizers = {
 	topAuthors: sanitizeStatsTopAuthorsResponse,
 	locations: sanitizeStatsLocationsResponse,
 	videoPlays: sanitizeStatsVideoPlaysResponse,
+	timeSeries: sanitizeStatsTimeSeriesResponse,
+	visits: sanitizeStatsVisitsResponse,
+	emailSummary: sanitizeStatsEmailSummaryResponse,
+	emailBreakdown: sanitizeStatsEmailBreakdownResponse,
 } satisfies Record< string, StatsSanitizer >;
 
 export type StatsSanitizerKey = keyof typeof statsSanitizers;

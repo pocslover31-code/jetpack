@@ -2,8 +2,26 @@
  * Internal dependencies
  */
 import { statsLocationsQuery } from '../stats-locations-query';
+import { statsProxyQuery, type StatsSanitizerKey } from '../stats-query';
 import { statsTopPostsQuery } from '../stats-top-posts-query';
 import type { StatsReportParams } from '../stats-query';
+
+const statsSanitizerKeys = [
+	'passthrough',
+	'site',
+	'topPosts',
+	'referrers',
+	'clicks',
+	'searchTerms',
+	'fileDownloads',
+	'topAuthors',
+	'locations',
+	'videoPlays',
+	'timeSeries',
+	'visits',
+	'emailSummary',
+	'emailBreakdown',
+] as const satisfies ReadonlyArray< StatsSanitizerKey >;
 
 describe( 'Stats query factories', () => {
 	it( 'disables report queries until a date range is available', () => {
@@ -66,6 +84,19 @@ describe( 'Stats query factories', () => {
 					summarize: false,
 				} ),
 			] )
+		);
+	} );
+
+	it.each( statsSanitizerKeys )( 'accepts the %s stats sanitizer key', sanitizer => {
+		const query = statsProxyQuery( {
+			name: sanitizer,
+			version: '1.1',
+			endpoint: 'stats/example',
+			sanitizer,
+		} );
+
+		expect( query.queryKey ).toEqual(
+			expect.arrayContaining( [ 'stats', sanitizer, 'stats/example', sanitizer ] )
 		);
 	} );
 } );
