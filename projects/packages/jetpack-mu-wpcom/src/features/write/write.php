@@ -887,8 +887,12 @@ function wpcom_write_render_admin_page() {
 			'isPublishedPost'        => 'publish' === $post_status,
 			// When the site is still Coming Soon (private by default), publishing
 			// lands a private post. The publish redirect tags the post URL so the
-			// post-publish next-steps checklist can surface there.
+			// post-publish next-steps checklist can surface there — but only for
+			// write-on flow sessions, signalled by the wpcom-write-on query arg the
+			// flow appends to the editor URL.
 			'isComingSoon'           => (int) get_option( 'wpcom_public_coming_soon' ) === 1,
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display-only flag; writes nothing, set by the write-on flow's editor landing URL.
+			'isWriteOnFlow'          => isset( $_GET['wpcom-write-on'] ),
 			'title'                  => $edit_title,
 			'isSaving'               => false,
 			'isPublished'            => false,

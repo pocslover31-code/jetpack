@@ -6143,12 +6143,14 @@ async function savePost( postStatus, isAutosave = false ) {
 				// the user later presses Back.
 				document.documentElement.style.visibility = 'hidden';
 
-				// On a Coming Soon site the published post is still private. Tag
-				// the redirect so the post-publish next-steps checklist (launch +
-				// share) surfaces on the post the author lands on. Public sites
-				// redirect to the bare permalink, unchanged.
+				// For a write-on flow session on a still-private Coming Soon site,
+				// the published post isn't public yet. Tag the redirect so the
+				// post-publish next-steps checklist (launch + share) surfaces on the
+				// post the author lands on. Every other case — non-write-on editor
+				// sessions, or already-public sites — redirects to the bare
+				// permalink, unchanged.
 				let destination = post.link;
-				if ( state.isComingSoon ) {
+				if ( state.isWriteOnFlow && state.isComingSoon ) {
 					try {
 						const url = new URL( post.link );
 						url.searchParams.set( 'wpcom_write_published', '1' );
