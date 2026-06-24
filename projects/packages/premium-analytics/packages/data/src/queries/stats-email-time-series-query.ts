@@ -11,6 +11,7 @@ export const statsEmailOpensTimeSeriesQuery = ( postId: number, params: StatsQue
 		endpoint: `stats/opens/emails/${ postId }`,
 		params,
 		sanitizer: 'timeSeries',
+		enabled: postId > 0,
 	} );
 
 export const statsEmailClicksTimeSeriesQuery = ( postId: number, params: StatsQueryParams = {} ) =>
@@ -20,4 +21,5 @@ export const statsEmailClicksTimeSeriesQuery = ( postId: number, params: StatsQu
 		endpoint: `stats/clicks/emails/${ postId }`,
 		params,
 		sanitizer: 'timeSeries',
+		enabled: postId > 0,
 	} );
