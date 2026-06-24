@@ -17,8 +17,12 @@ use Automattic\Jetpack\Jetpack_Mu_Wpcom\Common;
 
 if ( ! defined( 'WPCOM_WRITE_VERSION' ) ) {
 	// Use file modification time to bust CDN caches when files change.
-	define( 'WPCOM_WRITE_VERSION', (string) max( filemtime( __DIR__ . '/view.js' ), filemtime( __DIR__ . '/style.css' ), filemtime( __DIR__ . '/undo-history.js' ) ) );
+	define( 'WPCOM_WRITE_VERSION', (string) max( filemtime( __DIR__ . '/view.js' ), filemtime( __DIR__ . '/style.css' ), filemtime( __DIR__ . '/undo-history.js' ), filemtime( __DIR__ . '/post-publish-checklist.js' ), filemtime( __DIR__ . '/post-publish-checklist.css' ) ) );
 }
+
+// Post-publish next-steps checklist, shown on the published post after a
+// Write-editor publish on a Coming Soon site.
+require_once __DIR__ . '/post-publish-checklist.php';
 
 /**
  * Get the URL for a Write feature asset file.
@@ -881,6 +885,10 @@ function wpcom_write_render_admin_page() {
 			'editPostId'             => $edit_post_id,
 			'postStatus'             => $post_status,
 			'isPublishedPost'        => 'publish' === $post_status,
+			// When the site is still Coming Soon (private by default), publishing
+			// lands a private post. The publish redirect tags the post URL so the
+			// post-publish next-steps checklist can surface there.
+			'isComingSoon'           => (int) get_option( 'wpcom_public_coming_soon' ) === 1,
 			'title'                  => $edit_title,
 			'isSaving'               => false,
 			'isPublished'            => false,
