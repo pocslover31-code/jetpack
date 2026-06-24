@@ -25,6 +25,11 @@ export {
 } from './use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './use-stats-archives';
+	useStatsEmailOpensBreakdown,
+	useStatsEmailClicksBreakdown,
+	type StatsEmailClicksBreakdown,
+	type StatsEmailOpensBreakdown,
+} from './use-stats-email-breakdown';
 export type { UseStatsOptions } from './use-stats-report';
 
 /**
