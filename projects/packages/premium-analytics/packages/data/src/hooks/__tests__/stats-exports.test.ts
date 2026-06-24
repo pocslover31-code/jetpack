@@ -18,6 +18,8 @@ const statsHookNames = [
 	'useStatsAppDashboardModuleSettings',
 	'useStatsAppDashboardModuleSettingsMutation',
 	'useStatsArchives',
+	'useStatsAppDashboardModules',
+	'useStatsAppDashboardModulesMutation',
 ] as const satisfies ReadonlyArray< keyof typeof dataPackage >;
 
 describe( 'Stats public hook names', () => {
