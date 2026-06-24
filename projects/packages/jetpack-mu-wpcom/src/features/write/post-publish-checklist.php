@@ -94,39 +94,39 @@ function wpcom_write_get_post_publish_checklist_strings() {
 
 /**
  * Enqueue the overlay assets when the checklist should render.
+ *
+ * @return void
  */
-add_action(
-	'wp_enqueue_scripts',
-	function () {
-		if ( ! wpcom_write_should_show_post_publish_checklist() ) {
-			return;
-		}
-
-		wp_enqueue_style(
-			'wpcom-write-post-publish-checklist',
-			wpcom_write_asset_url( 'post-publish-checklist.css' ),
-			array(),
-			WPCOM_WRITE_VERSION
-		);
-
-		wp_enqueue_script(
-			'wpcom-write-post-publish-checklist',
-			wpcom_write_asset_url( 'post-publish-checklist.js' ),
-			array(),
-			WPCOM_WRITE_VERSION,
-			true
-		);
-
-		wp_localize_script(
-			'wpcom-write-post-publish-checklist',
-			'wpcomWritePostPublishChecklist',
-			array(
-				'launchpadUrl' => wpcom_write_post_publish_launchpad_url(),
-				'marker'       => WPCOM_WRITE_PUBLISHED_MARKER,
-			)
-		);
+function wpcom_write_enqueue_post_publish_checklist_assets() {
+	if ( ! wpcom_write_should_show_post_publish_checklist() ) {
+		return;
 	}
-);
+
+	wp_enqueue_style(
+		'wpcom-write-post-publish-checklist',
+		wpcom_write_asset_url( 'post-publish-checklist.css' ),
+		array(),
+		WPCOM_WRITE_VERSION
+	);
+
+	wp_enqueue_script(
+		'wpcom-write-post-publish-checklist',
+		wpcom_write_asset_url( 'post-publish-checklist.js' ),
+		array(),
+		WPCOM_WRITE_VERSION,
+		true
+	);
+
+	wp_localize_script(
+		'wpcom-write-post-publish-checklist',
+		'wpcomWritePostPublishChecklist',
+		array(
+			'launchpadUrl' => wpcom_write_post_publish_launchpad_url(),
+			'marker'       => WPCOM_WRITE_PUBLISHED_MARKER,
+		)
+	);
+}
+add_action( 'wp_enqueue_scripts', 'wpcom_write_enqueue_post_publish_checklist_assets' );
 
 /**
  * Render the post-publish checklist overlay markup in the footer.

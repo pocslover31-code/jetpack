@@ -2223,6 +2223,40 @@ class Write_Test extends \WorDBless\BaseTestCase {
 	}
 
 	/**
+	 * The overlay assets should be enqueued when the checklist is eligible to show.
+	 */
+	public function test_post_publish_checklist_enqueues_assets_when_eligible() {
+		wp_set_current_user( $this->admin_id );
+		update_option( 'wpcom_public_coming_soon', 1 );
+		$this->go_to_singular_post();
+		$_GET[ WPCOM_WRITE_PUBLISHED_MARKER ] = '1';
+
+		wpcom_write_enqueue_post_publish_checklist_assets();
+
+		$this->assertTrue( wp_script_is( 'wpcom-write-post-publish-checklist', 'enqueued' ) );
+		$this->assertTrue( wp_style_is( 'wpcom-write-post-publish-checklist', 'enqueued' ) );
+	}
+
+	/**
+	 * The overlay assets should not be enqueued when the request is not eligible.
+	 */
+	public function test_post_publish_checklist_does_not_enqueue_when_ineligible() {
+		// Start from a clean queue so a prior test's enqueue can't leak in.
+		wp_dequeue_script( 'wpcom-write-post-publish-checklist' );
+		wp_dequeue_style( 'wpcom-write-post-publish-checklist' );
+
+		wp_set_current_user( $this->admin_id );
+		update_option( 'wpcom_public_coming_soon', 1 );
+		$this->go_to_singular_post();
+		// No marker set, so the checklist is not eligible.
+
+		wpcom_write_enqueue_post_publish_checklist_assets();
+
+		$this->assertFalse( wp_script_is( 'wpcom-write-post-publish-checklist', 'enqueued' ) );
+		$this->assertFalse( wp_style_is( 'wpcom-write-post-publish-checklist', 'enqueued' ) );
+	}
+
+	/**
 	 * The overlay markup should not render when the request is not eligible.
 	 */
 	public function test_post_publish_checklist_renders_nothing_when_not_eligible() {
