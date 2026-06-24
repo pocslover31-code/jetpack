@@ -67,6 +67,13 @@ class Podcast {
 
 		Tracks::init();
 
+		// `class_exists()` guards a mid-deploy window where the loader (this
+		// file) may land before `class-podcast-status-endpoint.php` on
+		// non-atomic deploys.
+		if ( ( is_admin() || self::is_rest_request() ) && class_exists( Podcast_Status_Endpoint::class ) ) {
+			Podcast_Status_Endpoint::init();
+		}
+
 		// Wire the wp-admin entry point. Admin_Page::init() stages the wp-build
 		// dashboard; menu registration itself runs from wpcom-admin-menu.php
 		// via Admin_Page::add_wp_admin_submenu() at admin_menu priority 999999.
