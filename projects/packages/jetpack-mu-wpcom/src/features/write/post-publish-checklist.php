@@ -59,18 +59,19 @@ function wpcom_write_should_show_post_publish_checklist() {
 }
 
 /**
- * URL of the launchpad screen the "Launch your site" task links to.
+ * URL the "Launch your site" task links to.
  *
- * The launchpad already models the launch task (and is where a future
- * email-verification gate would live), so the checklist routes there rather than
- * launching in place.
+ * Points at Calypso's canonical launch-site flow, which takes the user through
+ * domain/plan (skipped if already chosen) and flips a Coming Soon site public.
+ * Unlike the launchpad, it does not depend on the site having
+ * launchpad_screen='full', so it works for these sites as created today.
  *
- * @return string The launchpad URL for this site.
+ * @return string The launch URL for this site.
  */
-function wpcom_write_post_publish_launchpad_url() {
+function wpcom_write_post_publish_launch_url() {
 	$host = wp_parse_url( home_url(), PHP_URL_HOST );
 
-	return 'https://wordpress.com/setup/write/launchpad?siteSlug=' . rawurlencode( (string) $host );
+	return 'https://wordpress.com/start/launch-site?siteSlug=' . rawurlencode( (string) $host );
 }
 
 /**
@@ -121,8 +122,8 @@ function wpcom_write_enqueue_post_publish_checklist_assets() {
 		'wpcom-write-post-publish-checklist',
 		'wpcomWritePostPublishChecklist',
 		array(
-			'launchpadUrl' => wpcom_write_post_publish_launchpad_url(),
-			'marker'       => WPCOM_WRITE_PUBLISHED_MARKER,
+			'launchUrl' => wpcom_write_post_publish_launch_url(),
+			'marker'    => WPCOM_WRITE_PUBLISHED_MARKER,
 		)
 	);
 }

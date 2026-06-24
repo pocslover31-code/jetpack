@@ -126,8 +126,8 @@
 		if ( launch ) {
 			launch.addEventListener( 'click', function () {
 				recordEvent( 'wpcom_write_post_publish_checklist_launch_click' );
-				if ( config.launchpadUrl ) {
-					window.location.href = config.launchpadUrl;
+				if ( config.launchUrl ) {
+					window.location.href = config.launchUrl;
 				}
 			} );
 		}

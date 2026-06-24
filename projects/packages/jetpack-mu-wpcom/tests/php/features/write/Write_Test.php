@@ -61,7 +61,7 @@ class Write_Test extends \WorDBless\BaseTestCase {
 		wp_set_current_user( 0 );
 		delete_option( 'wpcom_write_rewrite_version' );
 		delete_option( 'wpcom_public_coming_soon' );
-		unset( $_GET[ WPCOM_WRITE_PUBLISHED_MARKER ], $_GET['wpcom-write-on'] );
+		unset( $_GET[ WPCOM_WRITE_PUBLISHED_MARKER ] );
 		parent::tear_down();
 	}
 
@@ -2188,12 +2188,12 @@ class Write_Test extends \WorDBless\BaseTestCase {
 	}
 
 	/**
-	 * The launch task should link to the write launchpad for this site.
+	 * The launch task should link to Calypso's canonical launch-site flow for this site.
 	 */
-	public function test_post_publish_launchpad_url_targets_write_launchpad() {
-		$url = wpcom_write_post_publish_launchpad_url();
+	public function test_post_publish_launch_url_targets_launch_site_flow() {
+		$url = wpcom_write_post_publish_launch_url();
 
-		$this->assertStringContainsString( 'https://wordpress.com/setup/write/launchpad', $url );
+		$this->assertStringContainsString( 'https://wordpress.com/start/launch-site', $url );
 		$this->assertStringContainsString( 'siteSlug=', $url );
 		$host = wp_parse_url( home_url(), PHP_URL_HOST );
 		$this->assertStringContainsString( rawurlencode( (string) $host ), $url );
@@ -2270,36 +2270,5 @@ class Write_Test extends \WorDBless\BaseTestCase {
 		$html = ob_get_clean();
 
 		$this->assertSame( '', trim( $html ) );
-	}
-
-	/**
-	 * The write-on flow query arg should set the isWriteOnFlow editor state flag,
-	 * which is what limits the post-publish redirect tagging to write-on sessions.
-	 */
-	public function test_write_on_flow_query_arg_sets_state_flag() {
-		wp_set_current_user( $this->admin_id );
-
-		$_GET['wpcom-write-on'] = '1';
-		ob_start();
-		wpcom_write_render_admin_page();
-		ob_end_clean();
-		$state = wp_interactivity_state( 'wpcom-write' );
-		unset( $_GET['wpcom-write-on'] );
-
-		$this->assertTrue( $state['isWriteOnFlow'] );
-	}
-
-	/**
-	 * Without the write-on flow query arg, the isWriteOnFlow state flag is false.
-	 */
-	public function test_write_on_flow_flag_absent_without_query_arg() {
-		wp_set_current_user( $this->admin_id );
-
-		ob_start();
-		wpcom_write_render_admin_page();
-		ob_end_clean();
-		$state = wp_interactivity_state( 'wpcom-write' );
-
-		$this->assertFalse( $state['isWriteOnFlow'] );
 	}
 }
