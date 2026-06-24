@@ -27,5 +27,9 @@ export { statsArchivesQuery } from './stats-archives-query';
 export {
 	statsAppNoticesQuery,
 	updateStatsAppNotice,
+	type StatsAppNoticeId,
 	type StatsAppNoticeMutationParams,
+	type StatsAppNoticeMutationResponse,
+	type StatsAppNotices,
+	type StatsAppNoticeStatus,
 } from './stats-app-notices-query';

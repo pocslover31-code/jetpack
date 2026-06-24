@@ -25,9 +25,14 @@ export {
 } from './use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './use-stats-archives';
+export {
 	useStatsAppNotices,
 	useStatsAppNoticeMutation,
 	type StatsAppNoticeMutationParams,
+	type StatsAppNoticeMutationResponse,
+	type StatsAppNoticeId,
+	type StatsAppNotices,
+	type StatsAppNoticeStatus,
 } from './use-stats-app-notices';
 export type { UseStatsOptions } from './use-stats-report';
 
