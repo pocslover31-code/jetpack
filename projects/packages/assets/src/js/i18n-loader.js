@@ -23,7 +23,7 @@ module.exports = {
 	 * @param {string} path     - Bundle path being fetched. May have a query part.
 	 * @param {string} domain   - Text domain to register into.
 	 * @param {string} location - Location for the translation: 'plugin', 'theme', or 'core'.
-	 * @return {Promise} Resolved when the translations are registered, or rejected with an `Error`.
+	 * @return {Promise} Resolved when the translations are registered or none are available, or rejected with an `Error`.
 	 */
 	async downloadI18n( path, domain, location ) {
 		const state = this.state;
@@ -61,6 +61,10 @@ module.exports = {
 			// prettier-ignore
 			`${ state.baseUrl }${ locationAndDomain }-${ state.locale }-${ hash }.json${ query }`
 		);
+		if ( res.status === 404 ) {
+			// No translation file exists for this locale/domain — not an error.
+			return;
+		}
 		if ( ! res.ok ) {
 			throw new Error( `HTTP request failed: ${ res.status } ${ res.statusText }` );
 		}
