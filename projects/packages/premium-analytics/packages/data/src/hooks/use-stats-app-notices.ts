@@ -1,5 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
-import { queryClient } from '../providers';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
 	statsAppNoticesQuery,
 	updateStatsAppNotice,
@@ -15,6 +14,8 @@ export function useStatsAppNotices( params?: StatsQueryParams, options?: UseStat
 }
 
 export function useStatsAppNoticeMutation() {
+	const queryClient = useQueryClient();
+
 	return useMutation( {
 		mutationFn: ( data: StatsAppNoticeMutationParams ) => updateStatsAppNotice( data ),
 		onSuccess: () => {
