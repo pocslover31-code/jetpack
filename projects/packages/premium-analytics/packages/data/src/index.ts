@@ -59,6 +59,8 @@ export type {
 } from './api';
 export type {
 	StatsClicksItem,
+	StatsEmailBreakdownItem,
+	StatsEmailSummaryItem,
 	StatsFileDownloadsItem,
 	StatsItemAction,
 	StatsLocationsItem,

@@ -1,0 +1,4 @@
+Significance: patch
+Type: changed
+
+Stats: Make existing email and time-series sanitizers selectable from stats queries.
