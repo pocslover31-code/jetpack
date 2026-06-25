@@ -34,6 +34,15 @@ export {
 } from './hooks/use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './hooks/use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './hooks/use-stats-archives';
+export {
+	useStatsAppNotices,
+	useStatsAppNoticeMutation,
+	type StatsAppNoticeMutationParams,
+	type StatsAppNoticeMutationResponse,
+	type StatsAppNoticeId,
+	type StatsAppNotices,
+	type StatsAppNoticeStatus,
+} from './hooks/use-stats-app-notices';
 export type { UseStatsOptions } from './hooks/use-stats-report';
 export { prefetchReport } from './prefetch';
 export {

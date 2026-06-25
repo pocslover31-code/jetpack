@@ -24,3 +24,12 @@ export { statsCountryViewsQuery } from './stats-country-views-query';
 export { statsVideoPlaysQuery } from './stats-video-plays-query';
 export { statsAppDashboardModuleSettingsQuery } from './stats-app-dashboard-module-settings-query';
 export { statsArchivesQuery } from './stats-archives-query';
+export {
+	statsAppNoticesQuery,
+	updateStatsAppNotice,
+	type StatsAppNoticeId,
+	type StatsAppNoticeMutationParams,
+	type StatsAppNoticeMutationResponse,
+	type StatsAppNotices,
+	type StatsAppNoticeStatus,
+} from './stats-app-notices-query';
