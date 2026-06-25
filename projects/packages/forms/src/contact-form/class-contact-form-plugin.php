@@ -236,7 +236,6 @@ class Contact_Form_Plugin {
 			add_action( 'wp_ajax_create_new_form', array( $this, 'create_new_form' ) );
 			add_action( 'wp_ajax_grunion_export_to_gdrive', array( $this, 'export_to_gdrive' ) );
 		}
-		add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 		add_action( 'current_screen', array( $this, 'unread_count' ) );
 		add_action( 'current_screen', array( $this, 'redirect_edit_feedback_to_jetpack_forms' ) );
 
@@ -1473,44 +1472,11 @@ class Contact_Form_Plugin {
 
 	/**
 	 * Add the 'Form Responses' menu item as a submenu of Feedback.
+	 *
+	 * @deprecated $$next-version$$
 	 */
 	public function admin_menu() {
-		$slug = 'feedback';
-
-		// Do we still need to create the Feedback menu item for polldaddy?
-		// WPCOM already handles this. Self hosted will depend on us until we produce a new release for polldaddy.
-		if ( is_plugin_active( 'polldaddy/polldaddy.php' ) || ! Jetpack_Forms::is_legacy_menu_item_retired() ) {
-			add_menu_page(
-				__( 'Feedback', 'jetpack-forms' ),
-				__( 'Feedback', 'jetpack-forms' ),
-				'edit_pages',
-				$slug,
-				null,
-				'dashicons-feedback',
-				45
-			);
-		}
-
-		add_submenu_page(
-			$slug,
-			__( 'Form Responses', 'jetpack-forms' ),
-			__( 'Form Responses', 'jetpack-forms' ),
-			'edit_pages',
-			'edit.php?post_type=feedback',
-			null,
-			0
-		);
-
-		remove_submenu_page(
-			$slug,
-			$slug
-		);
-
-		// remove the first default submenu item
-		remove_submenu_page(
-			$slug,
-			'edit.php?post_type=feedback'
-		);
+		_deprecated_function( __METHOD__, 'jetpack-forms-$$next-version$$' );
 	}
 
 	/**
