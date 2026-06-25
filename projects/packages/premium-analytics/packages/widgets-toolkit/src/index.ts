@@ -65,6 +65,7 @@ export {
 export {
 	useAttributesWithSearchFallback,
 	useChartTheme,
+	useSegmentStyles,
 	useSeriesStyles,
 	useWidgetError,
 } from './hooks';
