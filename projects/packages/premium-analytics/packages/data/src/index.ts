@@ -121,6 +121,7 @@ export type {
 	StatsAppReferrersSpamMutationResponse,
 	StatsAppReferrersSpamResponse,
 } from './hooks/use-stats-app-referrers-spam';
+export type { StatsDeviceProperty } from './queries/stats-devices-query';
 export type { UseStatsOptions } from './hooks/use-stats-report';
 export { prefetchReport } from './prefetch';
 export {
