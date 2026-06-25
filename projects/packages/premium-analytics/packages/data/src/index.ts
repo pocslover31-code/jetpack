@@ -34,6 +34,13 @@ export {
 } from './hooks/use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './hooks/use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './hooks/use-stats-archives';
+export {
+	useStatsEmailOpensBreakdown,
+	useStatsEmailClicksBreakdown,
+	type StatsEmailBreakdown,
+	type StatsEmailClicksBreakdown,
+	type StatsEmailOpensBreakdown,
+} from './hooks/use-stats-email-breakdown';
 export type { UseStatsOptions } from './hooks/use-stats-report';
 export { prefetchReport } from './prefetch';
 export {
