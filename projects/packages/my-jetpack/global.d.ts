@@ -481,6 +481,18 @@ interface Window {
 		canUserViewStats: boolean;
 		isUserFromKnownHost: string;
 		loadAddLicenseScreen: string;
+		jetpackAdminMenu: {
+			items: Array< {
+				menuSlug: string;
+				menuTitle: string;
+				position: number;
+			} >;
+			videoPressMenuItem: {
+				menuSlug: string;
+				menuTitle: string;
+				position: number;
+			};
+		};
 		myJetpackCheckoutUri: string;
 		myJetpackFlags: {
 			showFullJetpackStatsCard: boolean;
