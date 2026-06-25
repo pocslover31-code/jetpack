@@ -34,6 +34,16 @@ export {
 } from './hooks/use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './hooks/use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './hooks/use-stats-archives';
+export {
+	useStatsAppDashboardModules,
+	useStatsAppDashboardModulesMutation,
+} from './hooks/use-stats-app-dashboard-modules';
+export type {
+	StatsAppDashboardModules,
+	StatsAppDashboardModulesSettings,
+	StatsAppDashboardModuleValue,
+	StatsAppDashboardTrafficModule,
+} from './hooks/use-stats-app-dashboard-modules';
 export type { UseStatsOptions } from './hooks/use-stats-report';
 export { prefetchReport } from './prefetch';
 export {
