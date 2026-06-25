@@ -34,8 +34,8 @@
 		"@wordpress/components": "35.0.1",
 		"@wordpress/element": "8.0.1",
 		"@wordpress/i18n": "6.21.1",
-		"@wordpress/icons": "13.1.0",
-		"@wordpress/ui": "0.13.0",
+		"@wordpress/icons": "15.0.0",
+		"@wordpress/ui": "0.16.0",
 		"clsx": "2.1.1",
 		"prop-types": "15.8.1"
 	},
