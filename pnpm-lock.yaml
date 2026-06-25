@@ -4,7 +4,7 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
-pnpmfileChecksum: sha256-KDAA/9+HlsaLmbPuU9u0xS0PrYDsxkfYKnXoa96u7sk=
+pnpmfileChecksum: sha256-yj3oGIXHoU6+XShLFt2I3INZ2FhPuRKqrgUKuzU7De0=
 
 patchedDependencies:
   react-autosize-textarea: 5c09e1dee59caaaba3871f9d722f93e56b41169db486b059597e8f8c788aa464
@@ -11874,7 +11874,7 @@ packages:
       react: ^18.0.0
       react-dom: ^18.0.0
       stylelint: '>=16.8.2'
-      vite: ^7.3.2
+      vite: '*'
     peerDependenciesMeta:
       '@types/react':
         optional: true
@@ -11897,7 +11897,7 @@ packages:
       react: ^18.0.0
       react-dom: ^18.0.0
       stylelint: '>=16.8.2'
-      vite: ^7.3.2
+      vite: '*'
     peerDependenciesMeta:
       '@types/react':
         optional: true
