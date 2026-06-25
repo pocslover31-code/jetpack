@@ -8,7 +8,6 @@
 namespace Automattic\Jetpack\Extensions\BlockNotes;
 
 use Automattic\Jetpack\Connection\Manager as Connection_Manager;
-use Automattic\Jetpack\My_Jetpack\Products\Jetpack_Ai;
 use Automattic\Jetpack\Status;
 use Automattic\Jetpack\Status\Host;
 
@@ -16,76 +15,52 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit( 0 );
 }
 
-const FEATURE_NAME            = 'block-notes';
-const ASSET_BASE_PATH         = 'widgets.wp.com/agents-manager/';
-const ASSET_JS_URL            = 'https://' . ASSET_BASE_PATH . 'block-notes.min.js';
-const ASSET_JSON_URL          = 'https://' . ASSET_BASE_PATH . 'block-notes.asset.json';
-const ASSET_JSON_PATH         = ASSET_BASE_PATH . 'block-notes.asset.json';
-const ASSET_TRANSIENT         = 'jetpack_block_notes_asset';
-const HEADLESS_AGENT_PROVIDER = 'block-notes/headless-agent-provider';
+const FEATURE_NAME    = 'block-notes';
+const ASSET_BASE_PATH = 'widgets.wp.com/agents-manager/';
+const ASSET_JS_URL    = 'https://' . ASSET_BASE_PATH . 'block-notes.min.js';
+const ASSET_JSON_URL  = 'https://' . ASSET_BASE_PATH . 'block-notes.asset.json';
+const ASSET_JSON_PATH = ASSET_BASE_PATH . 'block-notes.asset.json';
+const ASSET_TRANSIENT = 'jetpack_block_notes_asset';
 
 /**
  * Check if Block Notes is enabled.
  *
- * Enabled when the Big Sky plugin is active, or when the site has
- * a paid Jetpack AI plan and AI features are not disabled.
+ * Enabled when the Big Sky plugin is active, or when Jetpack AI features
+ * are available. Actual AI usage and quota enforcement happen when the
+ * agent request is made, matching Image Studio.
  *
  * @return bool
  */
 function is_block_notes_enabled() {
+	if ( is_big_sky_enabled() ) {
+		$enabled = true;
+	} else {
+		$enabled = has_jetpack_ai_features();
+	}
+
 	/**
-	 * Temporarily disabled while we investigate expensive API calls
-	 * triggered by has_paid_ai_plan() on every Gutenberg page load for
-	 * self-hosted sites. Filter allows tests and development to re-enable.
+	 * Filter whether Block Notes is enabled.
+	 *
+	 * The default value now reflects computed Block Notes availability instead
+	 * of a temporary hardcoded false.
 	 *
 	 * @since 15.8
 	 *
-	 * @param bool $enabled Whether Block Notes is force-enabled. Default false.
+	 * @param bool $enabled Whether Block Notes is enabled.
 	 */
-	if ( ! apply_filters( 'jetpack_block_notes_enabled', false ) ) {
-		return false;
+	$skip_signal_callback = __NAMESPACE__ . '\skip_big_sky_block_notes_loader';
+	$skip_signal_priority = has_filter( 'jetpack_block_notes_enabled', $skip_signal_callback );
+	if ( false !== $skip_signal_priority ) {
+		remove_filter( 'jetpack_block_notes_enabled', $skip_signal_callback, $skip_signal_priority );
 	}
 
-	if ( is_big_sky_enabled() ) {
-		return true;
+	$enabled = apply_filters( 'jetpack_block_notes_enabled', $enabled );
+
+	if ( false !== $skip_signal_priority ) {
+		add_filter( 'jetpack_block_notes_enabled', $skip_signal_callback, $skip_signal_priority );
 	}
 
-	if ( ! has_jetpack_ai_features() ) {
-		return false;
-	}
-
-	if ( ! has_paid_ai_plan() ) {
-		return false;
-	}
-
-	return true;
-}
-
-/**
- * Check if the site has a paid Jetpack AI plan.
- *
- * On WordPress.com, uses the lightweight wpcom_site_has_feature() lookup.
- * On self-hosted and Atomic sites, uses the My Jetpack product class.
- *
- * @return bool
- */
-function has_paid_ai_plan() {
-	$has_paid_plan = false;
-
-	if ( defined( 'IS_WPCOM' ) && IS_WPCOM && function_exists( 'wpcom_site_has_feature' ) ) {
-		$has_paid_plan = wpcom_site_has_feature( 'ai-assistant', get_current_blog_id() );
-	} elseif ( class_exists( Jetpack_Ai::class ) ) {
-		$has_paid_plan = Jetpack_Ai::has_paid_plan_for_product();
-	}
-
-	/**
-	 * Filter whether the site has a paid AI plan.
-	 *
-	 * @since 15.7
-	 *
-	 * @param bool $has_paid_plan Whether the site has a paid AI plan.
-	 */
-	return apply_filters( 'jetpack_block_notes_has_paid_ai_plan', $has_paid_plan );
+	return $enabled;
 }
 
 /**
@@ -103,9 +78,7 @@ function is_big_sky_enabled() {
 /**
  * Check whether AI features are available.
  *
- * - wpcom simple: always returns true. The jetpack_ai_enabled filter
- *   does not apply here; the paid plan check in has_paid_ai_plan()
- *   gates access instead.
+ * - wpcom simple: always available.
  * - Otherwise requires a connected owner, not in offline mode, and
  *   AI not disabled via the jetpack_ai_enabled filter.
  *
@@ -121,6 +94,32 @@ function has_jetpack_ai_features() {
 	return ( new Connection_Manager( 'jetpack' ) )->has_connected_owner()
 		&& ! ( new Status() )->is_offline_mode()
 		&& apply_filters( 'jetpack_ai_enabled', true );
+}
+
+/**
+ * Signal to Big Sky that Jetpack is handling Block Notes.
+ *
+ * Sets a jetpack_block_notes_enabled filter callback to true so that Big Sky
+ * skips its own Block Notes loading when Jetpack is handling the Big
+ * Sky-provided Block Notes entry point. Jetpack's own is_block_notes_enabled()
+ * ignores this callback when evaluating the feature gate.
+ *
+ * @return void
+ */
+function signal_block_notes_active() {
+	if ( is_big_sky_enabled() && is_block_notes_enabled() ) {
+		add_filter( 'jetpack_block_notes_enabled', __NAMESPACE__ . '\skip_big_sky_block_notes_loader', 5 );
+	}
+}
+add_action( 'init', __NAMESPACE__ . '\signal_block_notes_active' );
+
+/**
+ * Tell Big Sky to skip its native Block Notes loader.
+ *
+ * @return bool
+ */
+function skip_big_sky_block_notes_loader() {
+	return true;
 }
 
 /**
@@ -319,25 +318,6 @@ function enable_agents_manager_for_block_notes( $use_unified_experience ) {
 	return is_block_notes_enabled();
 }
 add_filter( 'agents_manager_use_unified_experience', __NAMESPACE__ . '\enable_agents_manager_for_block_notes' );
-
-/**
- * Register the Block Notes headless agent provider with the agents manager.
- *
- * When Block Notes is enabled, adds the Block Notes headless
- * agent provider module so the agents manager can load it.
- *
- * @param array $providers Existing agent provider module IDs.
- * @return array Modified array of provider module IDs.
- */
-function register_headless_agent_provider( $providers ) {
-	if ( ! is_block_notes_enabled() ) {
-		return $providers;
-	}
-
-	$providers[] = HEADLESS_AGENT_PROVIDER;
-	return $providers;
-}
-add_filter( 'agents_manager_agent_providers', __NAMESPACE__ . '\register_headless_agent_provider' );
 
 /**
  * Register Block Notes meta fields and filters.

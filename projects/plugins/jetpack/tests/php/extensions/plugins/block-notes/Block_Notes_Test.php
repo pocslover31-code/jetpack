@@ -39,10 +39,6 @@ class Block_Notes_Test extends \WP_UnitTestCase {
 		$GLOBALS['wp_scripts']  = new WP_Scripts();
 		$this->reset_availability();
 		$this->simulate_connected_owner();
-		$this->simulate_paid_ai_plan();
-		// Re-enable Block Notes for tests (production is temporarily disabled via the
-		// jetpack_block_notes_enabled filter defaulting to false).
-		add_filter( 'jetpack_block_notes_enabled', '__return_true' );
 		// Ensure Big Sky is disabled by default so tests aren't affected by the
 		// Big_Sky class persisting across tests once simulate_big_sky_class() runs.
 		update_option( 'big_sky_enable', '0' );
@@ -59,7 +55,6 @@ class Block_Notes_Test extends \WP_UnitTestCase {
 		remove_all_filters( 'agents_manager_agent_providers' );
 		remove_all_filters( 'pre_http_request' );
 		remove_all_filters( 'jetpack_ai_enabled' );
-		remove_all_filters( 'jetpack_block_notes_has_paid_ai_plan' );
 		remove_filter( 'get_avatar_data', 'Automattic\Jetpack\Extensions\BlockNotes\customize_ai_avatar', 10 );
 		unregister_meta_key( 'comment', 'bigsky_ai_processed_date' );
 		( new \Automattic\Jetpack\Connection\Manager( 'jetpack' ) )->reset_connection_status();
@@ -97,20 +92,6 @@ class Block_Notes_Test extends \WP_UnitTestCase {
 	 */
 	private function disable_ai_features() {
 		add_filter( 'jetpack_ai_enabled', '__return_false' );
-	}
-
-	/**
-	 * Simulate having a paid AI plan via the jetpack_block_notes_has_paid_ai_plan filter.
-	 */
-	private function simulate_paid_ai_plan() {
-		add_filter( 'jetpack_block_notes_has_paid_ai_plan', '__return_true' );
-	}
-
-	/**
-	 * Simulate not having a paid AI plan via the jetpack_block_notes_has_paid_ai_plan filter.
-	 */
-	private function simulate_no_paid_ai_plan() {
-		add_filter( 'jetpack_block_notes_has_paid_ai_plan', '__return_false' );
 	}
 
 	/**
@@ -289,41 +270,83 @@ class Block_Notes_Test extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Not enabled when AI features are available but no paid AI plan.
+	 * Filter can disable Block Notes after the cheap availability checks pass.
 	 */
-	public function test_is_not_enabled_without_paid_ai_plan() {
-		$this->simulate_no_paid_ai_plan();
+	public function test_is_not_enabled_when_filter_disables_block_notes() {
+		add_filter( 'jetpack_block_notes_enabled', '__return_false' );
 		$this->assertFalse( BlockNotes\is_block_notes_enabled() );
 	}
 
 	/**
-	 * Enabled via Big Sky even without a paid AI plan.
+	 * Kill switch filter can disable Block Notes even when Big Sky is active.
 	 */
-	public function test_is_enabled_via_big_sky_without_paid_plan() {
-		$this->simulate_no_paid_ai_plan();
+	public function test_is_not_enabled_via_big_sky_when_filter_disables_block_notes() {
+		$this->disable_ai_features();
 		$this->enable_big_sky();
+		add_filter( 'jetpack_block_notes_enabled', '__return_false' );
+		$this->assertFalse( BlockNotes\is_block_notes_enabled() );
+	}
+
+	// -------------------------------------------------------------------------
+	// signal_block_notes_active() tests
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Test signal_block_notes_active adds the skip signal when Big Sky is enabled.
+	 */
+	public function test_signal_adds_filter_when_big_sky_enabled() {
+		$skip_signal_callback = 'Automattic\Jetpack\Extensions\BlockNotes\skip_big_sky_block_notes_loader';
+
+		$this->enable_big_sky();
+		BlockNotes\signal_block_notes_active();
+
+		$this->assertSame( 5, has_filter( 'jetpack_block_notes_enabled', $skip_signal_callback ) );
+		$this->assertTrue( apply_filters( 'jetpack_block_notes_enabled', false ) );
+	}
+
+	/**
+	 * Test is_block_notes_enabled does not add the Big Sky skip signal by itself.
+	 */
+	public function test_is_block_notes_enabled_does_not_add_big_sky_skip_signal() {
+		$skip_signal_callback = 'Automattic\Jetpack\Extensions\BlockNotes\skip_big_sky_block_notes_loader';
+
+		$this->assertFalse( has_filter( 'jetpack_block_notes_enabled', $skip_signal_callback ) );
+
 		$this->assertTrue( BlockNotes\is_block_notes_enabled() );
-	}
 
-	// -------------------------------------------------------------------------
-	// has_paid_ai_plan() tests
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Returns false when no paid plan and no filter — exercises the
-	 * Jetpack_Ai::has_paid_plan_for_product() branch (class is autoloaded
-	 * but returns false without a real WPCOM connection).
-	 */
-	public function test_has_paid_ai_plan_false_without_paid_plan() {
-		remove_all_filters( 'jetpack_block_notes_has_paid_ai_plan' );
-		$this->assertFalse( BlockNotes\has_paid_ai_plan() );
+		$this->assertFalse( has_filter( 'jetpack_block_notes_enabled', $skip_signal_callback ) );
 	}
 
 	/**
-	 * Returns true when filter overrides to true.
+	 * Test signal_block_notes_active does NOT add filter when AI features are disabled.
 	 */
-	public function test_has_paid_ai_plan_true_via_filter() {
-		$this->assertTrue( BlockNotes\has_paid_ai_plan() );
+	public function test_signal_does_not_add_filter_when_disabled() {
+		$this->disable_ai_features();
+		BlockNotes\signal_block_notes_active();
+		$this->assertFalse( apply_filters( 'jetpack_block_notes_enabled', false ) );
+	}
+
+	/**
+	 * Test signal_block_notes_active does not override later AI feature changes without Big Sky.
+	 */
+	public function test_signal_does_not_override_late_ai_disable_without_big_sky() {
+		BlockNotes\signal_block_notes_active();
+		$this->disable_ai_features();
+		$this->assertFalse( BlockNotes\is_block_notes_enabled() );
+	}
+
+	/**
+	 * Test signal_block_notes_active does not override later feature gate changes.
+	 */
+	public function test_signal_does_not_override_feature_gate_when_big_sky_later_disabled() {
+		$this->enable_big_sky();
+		BlockNotes\signal_block_notes_active();
+
+		update_option( 'big_sky_enable', '' );
+		$this->disable_ai_features();
+
+		$this->assertTrue( apply_filters( 'jetpack_block_notes_enabled', false ) );
+		$this->assertFalse( BlockNotes\is_block_notes_enabled() );
 	}
 
 	// -------------------------------------------------------------------------
@@ -998,50 +1021,6 @@ class Block_Notes_Test extends \WP_UnitTestCase {
 		$result = BlockNotes\enable_agents_manager_for_block_notes( true );
 
 		$this->assertTrue( $result );
-	}
-
-	// -------------------------------------------------------------------------
-	// register_headless_agent_provider() tests
-	// -------------------------------------------------------------------------
-
-	/**
-	 * Test that agents_manager_agent_providers includes Block Notes provider
-	 * when AI features are available.
-	 */
-	public function test_agent_providers_includes_block_notes_when_enabled() {
-		$providers = BlockNotes\register_headless_agent_provider( array() );
-
-		$this->assertContains( BlockNotes\HEADLESS_AGENT_PROVIDER, $providers );
-	}
-
-	/**
-	 * Test that agents_manager_agent_providers does NOT include Block Notes
-	 * provider when AI features are disabled.
-	 */
-	public function test_agent_providers_excludes_block_notes_when_disabled() {
-		$this->disable_ai_features();
-
-		$providers = BlockNotes\register_headless_agent_provider( array() );
-
-		$this->assertNotContains( BlockNotes\HEADLESS_AGENT_PROVIDER, $providers );
-	}
-
-	/**
-	 * Test that register_headless_agent_provider preserves existing providers.
-	 */
-	public function test_agent_providers_preserves_existing_providers() {
-		$existing  = array( 'some-other/provider' );
-		$providers = BlockNotes\register_headless_agent_provider( $existing );
-
-		$this->assertContains( 'some-other/provider', $providers );
-		$this->assertContains( BlockNotes\HEADLESS_AGENT_PROVIDER, $providers );
-	}
-
-	/**
-	 * Test HEADLESS_AGENT_PROVIDER constant value.
-	 */
-	public function test_headless_agent_provider_constant() {
-		$this->assertEquals( 'block-notes/headless-agent-provider', BlockNotes\HEADLESS_AGENT_PROVIDER );
 	}
 
 	// -------------------------------------------------------------------------
