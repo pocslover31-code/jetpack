@@ -23,6 +23,8 @@ export {
 	type BarChartData,
 	type BarChartStyle,
 	WidgetLoadingOverlay,
+	SemiCircleChart,
+	type SemiCircleChartData,
 } from './components';
 
 /**
