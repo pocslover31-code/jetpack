@@ -25,6 +25,7 @@ export {
 } from './use-stats-app-dashboard-module-settings';
 export type { StatsAppDashboardModuleSettings } from './use-stats-app-dashboard-module-settings';
 export { useStatsArchives, type StatsArchivesResponse } from './use-stats-archives';
+export { useStatsAppPurchases } from './use-stats-app-purchases';
 export type { UseStatsOptions } from './use-stats-report';
 
 /**
