@@ -38,7 +38,7 @@
 		"@wordpress/element": "8.0.1",
 		"@wordpress/hooks": "4.48.1",
 		"@wordpress/i18n": "6.21.1",
-		"@wordpress/ui": "0.13.0",
+		"@wordpress/ui": "0.16.0",
 		"@wordpress/widgets": "4.48.1",
 		"clsx": "2.1.1",
 		"copy-webpack-plugin": "14.0.0",
