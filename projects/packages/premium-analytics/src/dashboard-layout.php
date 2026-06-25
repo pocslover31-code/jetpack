@@ -221,6 +221,18 @@ function seed_default_dashboard_layout( $dashboard_layout, $dashboard_name = '' 
 		);
 	}
 
+	if ( ! in_array( 'default-top-platforms-widget-instance', $uuids, true ) ) {
+		$dashboard_layout[] = array(
+			'uuid'      => 'default-top-platforms-widget-instance',
+			'type'      => 'jpa/top-platforms',
+			'placement' => array(
+				'width'  => 2,
+				'height' => 2,
+				'order'  => 3,
+			),
+		);
+	}
+
 	return $dashboard_layout;
 }
 add_filter( DASHBOARD_DEFAULT_LAYOUT_FILTER, __NAMESPACE__ . '\\seed_default_dashboard_layout', 10, 2 );
