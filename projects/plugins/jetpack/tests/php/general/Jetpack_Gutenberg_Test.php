@@ -853,6 +853,44 @@ class Jetpack_Gutenberg_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * The dynamic (render_callback) blocks added to the lazy set in JETPACK-1747 must
+	 * stay in it. They are only safe to defer because each registers a single block
+	 * type named after its directory and does no front-end work at `init` time; a
+	 * refactor that breaks those invariants must remove the block from the list (and
+	 * fail this guard) rather than silently leave it deferring incorrectly.
+	 *
+	 * @dataProvider provider_newly_deferred_dynamic_blocks
+	 *
+	 * @param string $feature Block feature (directory) name expected in the lazy set.
+	 */
+	#[DataProvider( 'provider_newly_deferred_dynamic_blocks' )]
+	public function test_lazy_set_includes_newly_deferred_dynamic_blocks( $feature ) {
+		$this->assertContains(
+			$feature,
+			$this->get_lazy_blocks(),
+			"$feature should be deferred to first front-end render."
+		);
+
+		// The block file must exist for the lazy loader to include it on render.
+		$this->assertFileExists(
+			JETPACK__PLUGIN_DIR . "extensions/blocks/{$feature}/{$feature}.php",
+			"$feature block file must exist at the path the lazy loader includes."
+		);
+	}
+
+	/**
+	 * Data provider listing the dynamic blocks JETPACK-1747 added to the lazy set.
+	 *
+	 * @return array[]
+	 */
+	public static function provider_newly_deferred_dynamic_blocks() {
+		return array(
+			'instagram-gallery' => array( 'instagram-gallery' ),
+			'mailchimp'         => array( 'mailchimp' ),
+		);
+	}
+
+	/**
 	 * A deferred block file is included and the `init` callback it registers runs,
 	 * even though `init` has already fired by the time the block renders.
 	 *
@@ -945,7 +983,7 @@ class Jetpack_Gutenberg_Test extends WP_UnitTestCase {
 		$saved_user_id = get_current_user_id();
 		$saved_uri     = $_SERVER['REQUEST_URI'] ?? null;
 
-		$lazy_filter = static function () use ( $feature ) {
+		$lazy_filter             = static function () use ( $feature ) {
 			return array( $feature );
 		};
 		$activate_modules_filter = static function ( $allcaps ) {
