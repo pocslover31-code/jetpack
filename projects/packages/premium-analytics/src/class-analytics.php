@@ -67,6 +67,14 @@ class Analytics {
 		Api_Proxy_Controller::register();
 		Notices_Controller::register();
 
+		// Load the widget manifest (defines jpa_get_registered_widget_modules).
+		// Must happen before the is_admin() guard so REST requests can hydrate
+		// the widget type registry and serve /jetpack/v4/widget-modules.
+		$widgets_build = __DIR__ . '/../build/widgets.php';
+		if ( file_exists( $widgets_build ) ) {
+			require_once $widgets_build;
+		}
+
 		// Hydrate the widget type registry from the build manifest at init.
 		require_once __DIR__ . '/widget-types.php';
 

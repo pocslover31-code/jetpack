@@ -7,7 +7,9 @@ export {
 	ComparativeLineChart,
 	Legend,
 	WidgetRoot,
+	WidgetRootContext,
 	useWidgetRootContext,
+	type WidgetRootContextValue,
 	type LegendItem,
 	type SeriesStyle,
 	LeaderboardChart,
@@ -21,6 +23,8 @@ export {
 	type BarChartData,
 	type BarChartStyle,
 	WidgetLoadingOverlay,
+	SemiCircleChart,
+	type SemiCircleChartData,
 } from './components';
 
 /**
@@ -61,6 +65,7 @@ export {
 export {
 	useAttributesWithSearchFallback,
 	useChartTheme,
+	useSegmentStyles,
 	useSeriesStyles,
 	useWidgetError,
 } from './hooks';

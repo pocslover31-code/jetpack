@@ -166,7 +166,9 @@ function LocationsInner( { attributes }: WidgetRenderProps< LocationsAttributes 
 							{ __( 'Top Locations', 'jetpack-premium-analytics' ) }
 						</Button>
 					) : (
-						<Text>{ __( 'Top Locations', 'jetpack-premium-analytics' ) }</Text>
+						<Text variant="heading-md" render={ <h3 /> }>
+							{ __( 'Top Locations', 'jetpack-premium-analytics' ) }
+						</Text>
 					) }
 					{ selectedCountry && (
 						<>
