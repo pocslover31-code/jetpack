@@ -86,6 +86,7 @@ function wpcom_write_email_verification_status() {
  */
 function wpcom_write_email_verification_resend() {
 	if ( class_exists( 'Email_Verification' ) ) {
+		// @phan-suppress-next-line PhanUndeclaredClassMethod -- class_exists guarded above; defined in wpcom, not yet in the generated stubs (add to wpcom stub-defs.php).
 		Email_Verification::resend_verification_email();
 	}
 
