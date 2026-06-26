@@ -245,14 +245,16 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	 * Whether the preview gate is open, observed through a public surface.
 	 *
 	 * Uses enable_agents_manager_in_post_editor(), which returns the preview gate
-	 * ANDed with the post-editor and AI-features checks — both satisfied by the
-	 * gate tests (set_up connects an owner; this sets the post editor screen) —
-	 * so it reflects is_jetpack_ai_sidebar_preview_enabled() without reflection.
+	 * ANDed with the post-editor, proxied-request, and AI-features checks — all
+	 * satisfied by the gate tests (set_up connects an owner; this sets the post
+	 * editor screen and proxied request) — so it reflects
+	 * is_jetpack_ai_sidebar_preview_enabled() without reflection.
 	 *
 	 * @return bool
 	 */
 	private function gate_open(): bool {
 		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 		return Jetpack_AI_Sidebar::enable_agents_manager_in_post_editor( false );
 	}
 
@@ -530,6 +532,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	 */
 	public function test_toolbar_button_enabled_by_preview_feature_flag() {
 		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 		add_filter(
 			'jetpack_ai_sidebar_preview_features',
 			static function ( $features ) {
@@ -563,6 +566,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	 */
 	public function test_register_toolbar_button_extension_marks_feature_available() {
 		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 		$this->make_legacy_block_toolbar_extensions_available();
 		$this->enable_sidebar_extension_availability_checks();
 		add_filter( 'jetpack_ai_sidebar_enabled', '__return_true' );
@@ -636,6 +640,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	 */
 	public function test_enable_agents_manager_in_post_editor_enables_post_editor() {
 		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 
 		$this->assertTrue( Jetpack_AI_Sidebar::enable_agents_manager_in_post_editor( false ) );
 	}
@@ -668,6 +673,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	public function test_enable_agents_manager_in_post_editor_ignores_ai_editorial_review_filter() {
 		add_filter( 'jetpack_ai_editorial_review_enabled', '__return_false' );
 		$this->set_block_editor_screen();
+		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 
 		$this->assertTrue( Jetpack_AI_Sidebar::enable_agents_manager_in_post_editor( false ) );
 	}
@@ -907,11 +913,11 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * The external AM payload patch adds Simple proxied provider config in the page editor without changing the agent.
+	 * The external AM payload patch adds proxied provider config in the page editor without changing the agent.
 	 */
-	public function test_patch_jetpack_ai_sidebar_preview_data_adds_simple_proxied_provider_config_in_page_editor_without_overriding_agent() {
+	public function test_patch_jetpack_ai_sidebar_preview_data_adds_proxied_provider_config_in_page_editor_without_overriding_agent() {
 		$this->set_page_block_editor_screen();
-		$this->simulate_wpcom_simple();
+		$this->simulate_wpcom_platform();
 		$_SERVER['A8C_PROXIED_REQUEST'] = '1';
 		wp_enqueue_script( 'agents-manager', 'https://example.com/am.js', array(), '1.0', true );
 		wp_add_inline_script( 'agents-manager', 'const agentsManagerData = { sectionName: "gutenberg" };', 'before' );
