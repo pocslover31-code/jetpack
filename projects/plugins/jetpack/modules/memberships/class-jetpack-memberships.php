@@ -1116,3 +1116,6 @@ class Jetpack_Memberships {
 	}
 }
 Jetpack_Memberships::get_instance();
+
+require_once __DIR__ . '/abilities/class-memberships-abilities.php';
+\Automattic\Jetpack\Plugin\Abilities\Memberships_Abilities::init();
