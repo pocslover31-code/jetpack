@@ -649,6 +649,40 @@ class Cookie_Consent {
 	}
 
 	/**
+	 * Get configured log versions.
+	 *
+	 * @return array Log version configuration.
+	 */
+	public static function get_log_versions() {
+		$config     = self::get_config();
+		$log_config = isset( $config['log'] ) && is_array( $config['log'] ) ? $config['log'] : array();
+
+		return array(
+			'policy_version' => self::normalize_log_version( $log_config['policy_version'] ?? '1' ),
+			'banner_version' => self::normalize_log_version( $log_config['banner_version'] ?? '1' ),
+		);
+	}
+
+	/**
+	 * Normalize a configured log version value for callers.
+	 *
+	 * @param mixed $version Version value from config.
+	 * @return string Non-empty log version.
+	 */
+	private static function normalize_log_version( $version ) {
+		if ( ! is_scalar( $version ) ) {
+			return '1';
+		}
+
+		$version = sanitize_text_field( (string) $version );
+		if ( '' === $version ) {
+			return '1';
+		}
+
+		return $version;
+	}
+
+	/**
 	 * Get configuration with filters
 	 *
 	 * @return array Configuration array
@@ -715,6 +749,10 @@ class Cookie_Consent {
 			'show_on_error'       => true, // Show banner if geolocation fails.
 			'gdpr_honors_gpc'     => true, // Honor a Global Privacy Control signal as an opt-out in GDPR regions.
 			'event_prefix'        => 'jetpack', // Tracks event name prefix; set to 'woocommerceanalytics' for Unified Analytics continuity.
+			'log'                 => array(
+				'policy_version' => '1',
+				'banner_version' => '1',
+			),
 		);
 
 		/**
