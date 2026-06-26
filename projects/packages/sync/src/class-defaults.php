@@ -787,6 +787,7 @@ class Defaults {
 		'custom_css_add',
 		'custom_css_preprocessor',
 		'enclosure',
+		'guideline_source',
 		'imagedata',
 		'nova_price',
 		'publicize_results',
