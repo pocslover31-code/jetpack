@@ -177,3 +177,36 @@
 	color: #1e1e1e;
 	text-decoration: underline;
 }
+
+/* Inline email-verification step (swapped in by post-publish-checklist.js). */
+.wpcom-write-ppc__verify-status {
+	margin: 0 0 12px;
+	min-height: 1.4em;
+	font-size: 13px;
+	line-height: 1.4;
+	color: #6d6d6d;
+}
+
+.wpcom-write-ppc__resend {
+	display: block;
+	width: 100%;
+	margin-top: 8px;
+	padding: 11px 16px;
+	border: 1px solid #3858e9;
+	border-radius: 4px;
+	background: transparent;
+	color: #3858e9;
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.wpcom-write-ppc__resend:hover {
+	background: #f0f3ff;
+}
+
+.wpcom-write-ppc__launch:disabled,
+.wpcom-write-ppc__resend:disabled {
+	opacity: 0.6;
+	cursor: default;
+}

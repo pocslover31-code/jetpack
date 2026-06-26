@@ -1,0 +1,12 @@
+Significance: minor
+Type: added
+
+Write: gate the post-publish launch flow on email verification, with an inline confirm-and-resend step
+
+Scope note: the real enforcement is the back-end check on launch (wpcom
+launch_blocked_for_unverified_email); the inline confirm/resend step in the
+post-publish overlay is a separable friction-reducer (its own file + REST routes)
+that fails open to the plain launch redirect, so it can be held back at review
+without affecting the gate. The front-end status route mirrors the back-end
+predicate exactly — only Write On sites (site_creation_flow = 'write-on') with an
+unverified email are gated — so the overlay can never disagree with the launch gate.

@@ -90,6 +90,16 @@ function wpcom_write_get_post_publish_checklist_strings() {
 		'launchCta'   => __( 'Launch your site', 'jetpack-mu-wpcom' ),
 		'dismiss'     => __( 'Maybe later', 'jetpack-mu-wpcom' ),
 		'close'       => __( 'Close', 'jetpack-mu-wpcom' ),
+		// Inline email-verification step, swapped in when the author tries to
+		// launch with an unverified email (see post-publish-checklist.js).
+		'verifyTitle' => __( 'Confirm your email to launch', 'jetpack-mu-wpcom' ),
+		'verifyDesc'  => __( 'Your site can go public once your email is confirmed. Check your inbox for the confirmation link.', 'jetpack-mu-wpcom' ),
+		'verifyCheck' => __( 'Checking…', 'jetpack-mu-wpcom' ),
+		'resendCta'   => __( 'Resend email', 'jetpack-mu-wpcom' ),
+		'resendDone'  => __( 'Sent — check your inbox.', 'jetpack-mu-wpcom' ),
+		'resendFail'  => __( "Couldn't resend. Try again in a moment.", 'jetpack-mu-wpcom' ),
+		'confirmCta'  => __( "I've confirmed — launch", 'jetpack-mu-wpcom' ),
+		'stillUnver'  => __( 'Not confirmed yet. Click the link in your email, then try again.', 'jetpack-mu-wpcom' ),
 	);
 }
 
@@ -118,12 +128,27 @@ function wpcom_write_enqueue_post_publish_checklist_assets() {
 		true
 	);
 
+	$strings = wpcom_write_get_post_publish_checklist_strings();
+
 	wp_localize_script(
 		'wpcom-write-post-publish-checklist',
 		'wpcomWritePostPublishChecklist',
 		array(
-			'launchUrl' => wpcom_write_post_publish_launch_url(),
-			'marker'    => WPCOM_WRITE_PUBLISHED_MARKER,
+			'launchUrl'       => wpcom_write_post_publish_launch_url(),
+			'marker'          => WPCOM_WRITE_PUBLISHED_MARKER,
+			'verifyStateUrl'  => rest_url( 'wpcom/v2/write/email-verification' ),
+			'verifyResendUrl' => rest_url( 'wpcom/v2/write/email-verification/resend' ),
+			'restNonce'       => wp_create_nonce( 'wp_rest' ),
+			'strings'         => array(
+				'verifyTitle' => $strings['verifyTitle'],
+				'verifyDesc'  => $strings['verifyDesc'],
+				'verifyCheck' => $strings['verifyCheck'],
+				'resendCta'   => $strings['resendCta'],
+				'resendDone'  => $strings['resendDone'],
+				'resendFail'  => $strings['resendFail'],
+				'confirmCta'  => $strings['confirmCta'],
+				'stillUnver'  => $strings['stillUnver'],
+			),
 		)
 	);
 }

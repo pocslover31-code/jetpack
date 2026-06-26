@@ -122,13 +122,147 @@
 			}
 		}
 
+		const strings = config.strings || {};
+
+		/**
+		 * Same-origin REST call carrying the localized nonce.
+		 *
+		 * @param {string} url    - Absolute REST URL.
+		 * @param {string} method - HTTP method.
+		 * @return {Promise<Response>} The fetch promise.
+		 */
+		function restFetch( url, method ) {
+			return fetch( url, {
+				method,
+				credentials: 'same-origin',
+				headers: { 'X-WP-Nonce': config.restNonce || '' },
+			} );
+		}
+
+		/**
+		 * Resolve to whether launch is blocked pending email verification.
+		 *
+		 * Fails open: on any error (or no endpoint) it resolves false so the user
+		 * proceeds to the launch flow, where the back end is the real gate.
+		 *
+		 * @return {Promise<boolean>} Whether launch is blocked.
+		 */
+		function isLaunchBlocked() {
+			if ( ! config.verifyStateUrl ) {
+				return Promise.resolve( false );
+			}
+			return restFetch( config.verifyStateUrl, 'GET' )
+				.then( function ( res ) {
+					return res.ok ? res.json() : null;
+				} )
+				.then( function ( data ) {
+					return !! data && data.blocked === true;
+				} )
+				.catch( function () {
+					return false;
+				} );
+		}
+
+		/**
+		 * Navigate to the canonical launch flow.
+		 */
+		function goToLaunch() {
+			if ( config.launchUrl ) {
+				window.location.href = config.launchUrl;
+			}
+		}
+
+		/**
+		 * Swap the card's body into the inline "confirm your email" step.
+		 *
+		 * Replaces the checklist and the launch CTA with a resend control and an
+		 * "I've confirmed — launch" button that re-checks before proceeding.
+		 */
+		function showVerifyStep() {
+			const launchBtn = card.querySelector( '.wpcom-write-ppc__launch' );
+			if ( ! launchBtn ) {
+				return;
+			}
+			const title = card.querySelector( '.wpcom-write-ppc__title' );
+			const desc = card.querySelector( '.wpcom-write-ppc__desc' );
+			const list = card.querySelector( '.wpcom-write-ppc__list' );
+			if ( title ) {
+				title.textContent = strings.verifyTitle || title.textContent;
+			}
+			if ( desc ) {
+				desc.textContent = strings.verifyDesc || desc.textContent;
+			}
+			if ( list ) {
+				list.remove();
+			}
+
+			const status = document.createElement( 'p' );
+			status.className = 'wpcom-write-ppc__verify-status';
+			status.setAttribute( 'role', 'status' );
+			status.setAttribute( 'aria-live', 'polite' );
+
+			const confirm = document.createElement( 'button' );
+			confirm.type = 'button';
+			confirm.className = 'wpcom-write-ppc__launch';
+			confirm.textContent = strings.confirmCta || '';
+			confirm.addEventListener( 'click', function () {
+				const label = confirm.textContent;
+				confirm.disabled = true;
+				confirm.textContent = strings.verifyCheck || label;
+				status.textContent = '';
+				isLaunchBlocked().then( function ( blocked ) {
+					if ( ! blocked ) {
+						goToLaunch();
+						return;
+					}
+					confirm.disabled = false;
+					confirm.textContent = label;
+					status.textContent = strings.stillUnver || '';
+				} );
+			} );
+
+			const resend = document.createElement( 'button' );
+			resend.type = 'button';
+			resend.className = 'wpcom-write-ppc__resend';
+			resend.textContent = strings.resendCta || '';
+			resend.addEventListener( 'click', function () {
+				resend.disabled = true;
+				restFetch( config.verifyResendUrl, 'POST' )
+					.then( function ( res ) {
+						status.textContent = res.ok ? strings.resendDone || '' : strings.resendFail || '';
+					} )
+					.catch( function () {
+						status.textContent = strings.resendFail || '';
+					} )
+					.finally( function () {
+						resend.disabled = false;
+					} );
+			} );
+
+			launchBtn.parentNode.insertBefore( status, launchBtn );
+			launchBtn.parentNode.insertBefore( confirm, launchBtn );
+			launchBtn.parentNode.insertBefore( resend, launchBtn );
+			launchBtn.remove();
+			confirm.focus();
+		}
+
 		const launch = overlay.querySelector( '[data-wpcom-write-ppc-launch]' );
 		if ( launch ) {
 			launch.addEventListener( 'click', function () {
 				recordEvent( 'wpcom_write_post_publish_checklist_launch_click' );
-				if ( config.launchUrl ) {
-					window.location.href = config.launchUrl;
-				}
+				const label = launch.textContent;
+				launch.disabled = true;
+				launch.textContent = strings.verifyCheck || label;
+				isLaunchBlocked().then( function ( blocked ) {
+					if ( ! blocked ) {
+						goToLaunch();
+						return;
+					}
+					launch.disabled = false;
+					launch.textContent = label;
+					recordEvent( 'wpcom_write_post_publish_checklist_verify_shown' );
+					showVerifyStep();
+				} );
 			} );
 		}
 
