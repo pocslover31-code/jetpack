@@ -29,6 +29,29 @@ export const SEEDED_SETTINGS: SettingsResponse = {
 
 export const SEEDED_AI: AiState = {
 	enhancer: { available: true, enabled: false },
+	llmsTxt: { enabled: false, url: 'https://example.com/llms.txt' },
+	crawlers: {
+		catalog: [
+			{
+				slug: 'oai-searchbot',
+				label: 'ChatGPT Search (OpenAI)',
+				type: 'answer',
+				userAgent: 'OAI-SearchBot',
+				docUrl: 'https://example.com/openai-bots',
+			},
+			{
+				slug: 'gptbot',
+				label: 'ChatGPT (OpenAI)',
+				type: 'training',
+				userAgent: 'GPTBot',
+				docUrl: 'https://example.com/openai-bots',
+			},
+		],
+		blocked: [ 'gptbot' ],
+		searchEnginesVisible: true,
+		restrictedSubdomain: false,
+		staticRobotsTxt: false,
+	},
 };
 
 ( window as unknown as { JetpackScriptData: unknown } ).JetpackScriptData = {
