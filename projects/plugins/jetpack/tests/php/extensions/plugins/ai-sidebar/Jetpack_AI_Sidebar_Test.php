@@ -693,16 +693,17 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$this->assertSame( true, $data['jetpackAiSidebar']['features']['aiEditorialReview'] );
 		$this->assertSame( true, $data['jetpackAiSidebar']['features']['blockTransformations'] );
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['blockToolbarButton'] );
-		// generateFeedback and optimizeTitleSuggestion are in development: off outside testing environments.
+		// generateFeedback, proofreadContent and optimizeTitleSuggestion are in development: off outside testing environments.
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['generateFeedback'] );
+		$this->assertSame( false, $data['jetpackAiSidebar']['features']['proofreadContent'] );
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['optimizeTitleSuggestion'] );
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['chatHistory'] );
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['supportGuides'] );
 	}
 
 	/**
-	 * In an internal testing environment, the in-development suggestions (Generate
-	 * Feedback and Optimize Title) are exposed.
+	 * In an internal testing environment, the in-development suggestions
+	 * (Generate Feedback, Proofreader, and Optimize Title) are exposed.
 	 */
 	public function test_add_agents_manager_data_exposes_in_development_features_in_testing_environment() {
 		$this->set_block_editor_screen();
@@ -711,6 +712,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$data = Jetpack_AI_Sidebar::add_agents_manager_data( array( 'sectionName' => 'gutenberg' ) );
 
 		$this->assertSame( true, $data['jetpackAiSidebar']['features']['generateFeedback'] );
+		$this->assertSame( true, $data['jetpackAiSidebar']['features']['proofreadContent'] );
 		$this->assertSame( true, $data['jetpackAiSidebar']['features']['optimizeTitleSuggestion'] );
 	}
 
@@ -724,6 +726,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 			'jetpack_ai_sidebar_preview_features',
 			function ( $features ) {
 				$features['generateFeedback']        = true;
+				$features['proofreadContent']        = true;
 				$features['optimizeTitleSuggestion'] = true;
 				return $features;
 			}
@@ -732,6 +735,7 @@ class Jetpack_AI_Sidebar_Test extends WP_UnitTestCase {
 		$data = Jetpack_AI_Sidebar::add_agents_manager_data( array( 'sectionName' => 'gutenberg' ) );
 
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['generateFeedback'] );
+		$this->assertSame( false, $data['jetpackAiSidebar']['features']['proofreadContent'] );
 		$this->assertSame( false, $data['jetpackAiSidebar']['features']['optimizeTitleSuggestion'] );
 	}
 
