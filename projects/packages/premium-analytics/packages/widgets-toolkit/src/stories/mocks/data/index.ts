@@ -44,7 +44,13 @@ export {
 	mockSessionsByDeviceExtremeData,
 } from './sessions-by-device';
 
-export { mockCouponsData, mockCouponsComparisonData, mockCouponsEmptyData } from './coupons';
+export {
+	mockCouponsData,
+	mockCouponsComparisonData,
+	mockCouponsEmptyData,
+	mockCouponsByDateData,
+	mockCouponsByDateComparisonData,
+} from './coupons';
 
 export {
 	mockCustomersData,
