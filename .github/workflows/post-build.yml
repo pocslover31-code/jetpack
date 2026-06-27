@@ -282,7 +282,7 @@ jobs:
           token: ${{ steps.get_token.outputs.token }}
 
       - name: Download build artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ needs.find_artifact.outputs.artifact_name }}
           github-token: ${{ github.token }}
@@ -355,7 +355,7 @@ jobs:
             ${{ env.PLUGIN_SRC }}/composer.json
 
       - name: Download build artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ needs.find_artifact.outputs.artifact_name }}
           github-token: ${{ github.token }}
@@ -451,7 +451,7 @@ jobs:
           token: ${{ steps.get_token.outputs.token }}
 
       - name: Download build artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: ${{ needs.find_artifact.outputs.artifact_name }}
           github-token: ${{ github.token }}
