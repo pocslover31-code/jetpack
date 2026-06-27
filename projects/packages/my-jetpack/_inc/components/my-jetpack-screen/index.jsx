@@ -29,6 +29,7 @@ import useIsJetpackUserNew from '../../hooks/use-is-jetpack-user-new';
 import useMyJetpackConnection from '../../hooks/use-my-jetpack-connection';
 import useNotificationWatcher from '../../hooks/use-notification-watcher';
 import { useQueryParameter } from '../../hooks/use-query-parameter';
+import { isProductsOnlyMode } from '../../utils/is-products-only-mode';
 import EvaluationRecommendations from '../evaluation-recommendations';
 import IDCModal from '../idc-modal';
 import { MyJetpackTabPanel } from '../my-jetpack-tab-panel';
@@ -166,12 +167,16 @@ export default function MyJetpackScreen() {
 		return null;
 	}
 
+	const productsOnly = isProductsOnlyMode();
+
 	const optionalMenuItems = buildOptionalMenuItems( {
 		adminUrl,
 		isDevVersion,
 		userIsAdmin,
 		isSiteConnected,
 		isJetpackPluginActive,
+		// Products-only sites can't manage modules, so hide the modules footer link.
+		canManageModules: ! productsOnly,
 		onModulesClick: () => recordEvent( 'jetpack_myjetpack_footer_link_click', { link: 'modules' } ),
 		onResetClick: () => resetJetpackOptions(),
 		onResetKeyDown: e => onKeyDownCallback( e, () => resetJetpackOptions() ),
@@ -191,11 +196,12 @@ export default function MyJetpackScreen() {
 			<h1 className="screen-reader-text">{ __( 'My Jetpack', 'jetpack-my-jetpack' ) }</h1>
 
 			<IDCModal />
-			{ isSectionVisible && userIsAdmin && <EvaluationRecommendations /> }
+			{ ! productsOnly && isSectionVisible && userIsAdmin && <EvaluationRecommendations /> }
 
-			{ isRedirectingFromOnboarding && <OnboardingTour /> }
+			{ ! productsOnly && isRedirectingFromOnboarding && <OnboardingTour /> }
 
 			<MyJetpackTabPanel
+				productsOnly={ productsOnly }
 				beforeContent={
 					<>
 						<GlobalNotices />

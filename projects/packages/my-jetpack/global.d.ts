@@ -485,6 +485,7 @@ interface Window {
 		myJetpackFlags: {
 			showFullJetpackStatsCard: boolean;
 			videoPressStats: boolean;
+			productsOnly: boolean;
 		};
 		purchaseToken: string;
 		lifecycleStats: {
