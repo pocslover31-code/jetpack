@@ -1,0 +1,52 @@
+{
+	"name": "akismet-experimental-plugin",
+	"private": true,
+	"version": "0.1.0",
+	"description": "Experimental admin UI for the Akismet WordPress plugin — internal R&D, not shipped.",
+	"license": "GPL-2.0-or-later",
+	"scripts": {
+		"build": "wp-scripts build --output-path=build",
+		"lint:js": "wp-scripts lint-js src",
+		"lint:js:fix": "wp-scripts lint-js src --fix",
+		"start": "wp-scripts start --output-path=build",
+		"test": "wp-scripts test-unit-js --config tests/js/jest.config.js",
+		"test:watch": "wp-scripts test-unit-js --watch --config tests/js/jest.config.js"
+	},
+	"dependencies": {
+		"@tanstack/react-query": "^5.100.14",
+		"@wordpress/admin-ui": "^2.1.0",
+		"@wordpress/api-fetch": "^7.46.0",
+		"@wordpress/components": "^34.0.0",
+		"@wordpress/data": "^10.47.0",
+		"@wordpress/dataviews": "^15.0.0",
+		"@wordpress/element": "^7.0.0",
+		"@wordpress/i18n": "^6.19.0",
+		"@wordpress/icons": "^13.2.0",
+		"@wordpress/notices": "^5.47.0",
+		"@wordpress/theme": "^0.13.0",
+		"@wordpress/ui": "^0.13.0"
+	},
+	"devDependencies": {
+		"@testing-library/dom": "^10.4.1",
+		"@testing-library/jest-dom": "^6.6.0",
+		"@testing-library/react": "^16.1.0",
+		"@testing-library/user-event": "^14.6.1",
+		"@types/jest": "^29.5.0",
+		"@types/react": "^19.2.15",
+		"@types/react-dom": "^19.2.3",
+		"@types/wordpress__api-fetch": "^3.23.1",
+		"@wordpress/eslint-plugin": "^25.2.0",
+		"@wordpress/jest-preset-default": "^12.46.0",
+		"@wordpress/scripts": "^32.2.0",
+		"react": "^19.2.6",
+		"react-dom": "^19.2.6",
+		"typescript": "^5.7.0"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"overrides": {
+		"react": "^19.2.6",
+		"react-dom": "^19.2.6"
+	}
+}
