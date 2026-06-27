@@ -49,6 +49,20 @@ const socialWebpackConfig = {
 			// Workarounds for non-extracted `@wordpress/*` packages.
 			...jetpackWebpackConfig.BundledWpPkgsTranspileRules(),
 
+			// `@automattic/ui` ships various messages without a text-domain arg
+			jetpackWebpackConfig.TranspileRule( {
+				includeNodeModules: [ '@automattic/ui/' ],
+				babelOpts: {
+					configFile: false,
+					plugins: [
+						[
+							require.resolve( '@automattic/babel-plugin-replace-textdomain' ),
+							{ textdomain: 'jetpack-publicize-pkg' },
+						],
+					],
+				},
+			} ),
+
 			// Handle CSS.
 			jetpackWebpackConfig.CssRule( {
 				extensions: [ 'css', 'sass', 'scss' ],

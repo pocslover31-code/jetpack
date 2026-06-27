@@ -46,8 +46,14 @@ async function fixDeps( pkg ) {
 		pkg.name === '@automattic/data-stores' ||
 		pkg.name === '@automattic/i18n-utils' ||
 		pkg.name === '@automattic/launchpad' ||
-		pkg.name === '@automattic/ui'
+		pkg.name === '@automattic/ui' ||
+		pkg.name === '@automattic/viewport-react' ||
+		pkg.name === 'i18n-calypso'
 	) {
+		if ( pkg.dependencies?.[ '@wordpress/compose' ]?.startsWith( 'patch:' ) ) {
+			// b0rken dep
+			pkg.dependencies[ '@wordpress/compose' ] = '>=8.0.0';
+		}
 		for ( const [ dep, ver ] of Object.entries( pkg.dependencies ) ) {
 			if ( dep.startsWith( '@wordpress/' ) ) {
 				if ( ver.startsWith( '^' ) ) {
@@ -57,31 +63,6 @@ async function fixDeps( pkg ) {
 				}
 			}
 		}
-	}
-
-	// Breaking change in @wordpress/icons v11.
-	if (
-		pkg.name === '@automattic/components' &&
-		pkg.dependencies[ '@wordpress/icons' ]?.startsWith( '>=10' )
-	) {
-		pkg.dependencies[ '@wordpress/icons' ] += ' <11';
-	}
-
-	// Outdated dependency version causing dependabot warnings.
-	// Once we can drop @wordpress/icons v10 (see above), looks like this can go away.
-	// https://github.com/WordPress/gutenberg/issues/69557
-	if ( pkg.name === '@wordpress/icons' && pkg.dependencies?.[ '@babel/runtime' ] === '7.25.7' ) {
-		pkg.dependencies[ '@babel/runtime' ] = '^7.26.10';
-	}
-
-	// Missing dep or peer dep on react.
-	// https://github.com/WordPress/gutenberg/issues/73257 (fixed in @wordpress/icons v11, but see above)
-	if (
-		pkg.name === '@wordpress/icons' &&
-		! pkg.dependencies?.react &&
-		! pkg.peerDependencies?.react
-	) {
-		pkg.peerDependencies.react = '^18';
 	}
 
 	// We need to add the missing deps for `@wordpress/dataviews` because
