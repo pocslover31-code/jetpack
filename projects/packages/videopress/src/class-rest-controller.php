@@ -56,6 +56,47 @@ class Rest_Controller {
 				'args'                => self::stats_video_plays_args(),
 			)
 		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/caption-tracks',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( Caption_Tracks::class, 'rest_list_tracks' ),
+					'permission_callback' => array( Caption_Tracks::class, 'rest_permission_check' ),
+					'args'                => array(
+						'guid' => array(
+							'description' => __( 'VideoPress GUID.', 'jetpack-videopress-pkg' ),
+							'type'        => 'string',
+							'required'    => true,
+						),
+					),
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( Caption_Tracks::class, 'rest_save_track' ),
+					'permission_callback' => array( Caption_Tracks::class, 'rest_permission_check' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/caption-tracks/(?P<id>\d+)',
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( Caption_Tracks::class, 'rest_save_track' ),
+				'permission_callback' => array( Caption_Tracks::class, 'rest_permission_check' ),
+				'args'                => array(
+					'id' => array(
+						'description' => __( 'Caption track ID.', 'jetpack-videopress-pkg' ),
+						'type'        => 'integer',
+						'required'    => true,
+					),
+				),
+			)
+		);
 	}
 
 	/**
